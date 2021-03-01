@@ -15,11 +15,32 @@ namespace unitytest_tcpserver_host
     {
         // todo :: write todo list.
 
+        const string ipAdress = "127.0.0.1";
+        const int port = 8080;
+        const int serverRequestCheckFrequency = 10;
+
         static void Main(string[] args)
         {
             Console.WriteLine("Hello World!");
 
-         
+    
+            var server = new TcpServer(IPAddress.Parse(ipAdress), port);
+
+            server.InitTcpListener();
+
+
+            server.CheckStreamDataAvaliable();
+
+            ThreadPool.QueueUserWorkItem(new WaitCallback(CheckServerRequest<TcpServer>), server);
+        }
+
+        static void CheckServerRequest<T>(object _server) where T : TcpServer
+        {
+            T server = (T)_server;
+            server.CheckStreamDataAvaliable();
+
+            Thread.Sleep(serverRequestCheckFrequency); // todo :: only sleep if we have already processed all requests fast enough. Else continue working!
+            ThreadPool.QueueUserWorkItem(new WaitCallback(CheckServerRequest<TcpServer>), server);
         }
     }
 
@@ -31,20 +52,29 @@ namespace unitytest_tcpserver_host
         public TcpListener tcpListener;
         public ConcurrentBag<TcpClient> tcpClients = null;
         public const int readBufferSize = 8192;
+        public IPAddress ipAdress;
+        public int port;
+
 
         // maybes / not implemented yet state variables
-        public bool listeningToRequests = true;
+        public bool listeningToClients = true;
 
+        private TcpServer() {;}
+        public TcpServer(IPAddress ipAdress, int port)
+        {
+            this.ipAdress = ipAdress;
+            this.port = port;
+        }
 
         public void InitTcpListener()
         {
             tcpClients = new ConcurrentBag<TcpClient>();
             // todo :: adress and port should be in config file.
-            tcpListener = new TcpListener(IPAddress.Parse("127.0.0.1"), 8080);
+            tcpListener = new TcpListener(ipAdress, 8080);
             tcpListener.Start();
             Console.WriteLine("Server is listening");
 
-            tcpListenThread = new Thread(new ThreadStart(ListenIncomingRequests));
+            tcpListenThread = new Thread(new ThreadStart(ListenIncomingClients));
             tcpListenThread.IsBackground = true;
             tcpListenThread.Start();
         }
@@ -62,11 +92,11 @@ namespace unitytest_tcpserver_host
                 }
             });
         }
-        public void ListenIncomingRequests()
+        public void ListenIncomingClients()
         {
-            listeningToRequests = true;
+            listeningToClients = true;
 
-            while (listeningToRequests)
+            while (listeningToClients)
             {
                 TcpClient client = tcpListener.AcceptTcpClient();
                 client.ReceiveBufferSize = readBufferSize;
@@ -87,7 +117,7 @@ namespace unitytest_tcpserver_host
         public void ReadIncomingStream<T>(object _stream) where T : NetworkStream // fake type safety
         {
 
-            T stream = (T) _stream;
+            T stream = (T)_stream;
             if(stream.DataAvailable)
             {
                 // recieve
@@ -95,6 +125,8 @@ namespace unitytest_tcpserver_host
                 stream.Read(jsonSpan);
                 var jsonReader = new Utf8JsonReader(jsonSpan);
                 var request = JsonSerializer.Deserialize<TcpRequest>(ref jsonReader);
+
+                Console.WriteLine($"Server recieved: {request.serviceName} + {request.operationName} + {request.datamembers}");
 
                 // send back same message
                 var bytes = JsonSerializer.SerializeToUtf8Bytes<TcpRequest>(request);
@@ -140,17 +172,17 @@ namespace unitytest_tcpserver_host
         }
 
         // if use this contract, make sure client also has the same.
-        [DataContract]
-        internal class TcpRequest
+        public class TcpRequest
         {
-            [DataMember]
-            internal string serviceName;
+            // only properties are serialized
+            [JsonPropertyName("service")]
+            public string serviceName { get; set; }
 
-            [DataMember]
-            internal string operationName;
+            [JsonPropertyName("func")]
+            public string operationName { get; set; }
 
-            [DataMember]
-            internal string[] datamembers;
+            [JsonPropertyName("data")]
+            public List<byte[]> datamembers { get; set; }
         }
     }
 }
