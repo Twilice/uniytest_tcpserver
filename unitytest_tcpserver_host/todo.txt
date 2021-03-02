@@ -1,0 +1,32 @@
+todo :: write todo list
+
+
+Now base functionality is working. We can start to add back / figure out why the connection was dropped.
+
+Maybe it was not a total threading issue, only the other issues that stopped it from working as expected.
+
+Next steps should probably be to:
+
+ * figure out how to continuously listen on messages from the client. But without permanently listening to read request. 
+	- We want to be able to have 50k clients, but not listen to 50k clients at the same time.
+
+ * figure out if it is possible to send (write) message and listen to listen (read) in different threads without issues
+
+ * reconnect functionality if needed
+
+
+Later steps
+
+ * more service like for game
+
+ * implement in Unity
+	- check for restrictions, (easy stuff to test that catches lots of issues, standalone - mono,  standalone - il2cpp, webgl - il2cpp)
+
+ * host somewhere to test real life case
+
+
+Later Later Later steps
+
+ * make multiple services - game / chat / etc.
+
+ * make an actual game
