@@ -17,7 +17,6 @@ namespace unitytest_tcpserver_host
     {
         const string ipAdress = "127.0.0.1";
         const int port = 8000;
-        const int serverGameMessageCheckFrequency = 10;
 
         static void Main(string[] args)
         {
@@ -142,18 +141,23 @@ namespace unitytest_tcpserver_host
             try
             {
                 // recieve
-                Span<byte> jsonSpan = new byte[readBufferSize];
-                stream.Read(jsonSpan);
-                var jsonReader = new Utf8JsonReader(jsonSpan);
+                Span<byte> jsonBuffer = new byte[readBufferSize];
+                stream.Read(jsonBuffer);
+                var jsonReader = new Utf8JsonReader(jsonBuffer);
                 var gameMessage = JsonSerializer.Deserialize<TcpGameMessage>(ref jsonReader);
                 //// todo :: handle stream / tcp package failures and json serialize failures etc.
-
 
                 ProcessIncomingGameMessage(gameMessage);
                 ThreadPool.QueueUserWorkItem(ReadIncomingStream, stream, true);
             }
+            catch (JsonException e)
+            {
+                // todo :: dispose of client? What to do with incorrect json... Many environments will likely cause issue.
+                Console.WriteLine(e.Message + e.InnerException?.Message);
+            }
             catch (IOException e)
             {
+                // todo :: dispose of client? Or is error because client already is disposed?
                 Console.WriteLine(e.Message + e.InnerException?.Message);
             }
         }
@@ -204,9 +208,23 @@ namespace unitytest_tcpserver_host
                     return;
                 }
 
-                var stream = tcpClient.GetStream();
-                var tcpMessage = new TcpGameMessage() { serviceName = "default", operationName = "message", datamembers = new List<byte[]> { message.AsJsonBytes } };
-                stream.Write(tcpMessage.AsJsonBytes);
+                try
+                {
+                    var stream = tcpClient.GetStream();
+                    var tcpMessage = new TcpGameMessage() { serviceName = "chat", operationName = "message", datamembers = new List<byte[]> { message.AsJsonBytes } };
+                    stream.Write(tcpMessage.AsJsonBytes);
+                }
+                catch (JsonException e)
+                {
+                    // todo :: dispose of client? What to do with incorrect json... Many environments will likely cause issue.
+                    Console.WriteLine(e.Message + e.InnerException?.Message);
+                }
+                catch (IOException e)
+                {
+                    // todo :: dispose of client? Or is error because client already is disposed?
+                    Console.WriteLine(e.Message + e.InnerException?.Message);
+                }
+
             });
         }
 
@@ -232,14 +250,11 @@ namespace unitytest_tcpserver_host
         {
             // replace names with enums with underlying int/byte?
 
-            // only properties are serialized
-            [JsonPropertyName("service")]
+            // only properties are serialized - Unity does the opposite...
             public string serviceName { get; set; }
 
-            [JsonPropertyName("func")]
             public string operationName { get; set; }
 
-            [JsonPropertyName("data")]
             public List<byte[]> datamembers { get; set; }
 
             [JsonIgnore]

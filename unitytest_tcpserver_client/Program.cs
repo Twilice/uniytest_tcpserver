@@ -16,8 +16,6 @@ namespace unitytest_tcpserver_client
     {
         const string ipAdress = "127.0.0.1";
         const int port = 8000;
-        const int clientGameMessageCheckFrequency = 5;
-
 
         static void Main(string[] args)
         {
@@ -125,9 +123,9 @@ namespace unitytest_tcpserver_client
                 try
                 {
                     // recieve
-                    Span<byte> jsonSpan = new byte[readBufferSize];
-                    stream.Read(jsonSpan);
-                    var jsonReader = new Utf8JsonReader(jsonSpan);
+                    Span<byte> jsonBuffer = new byte[readBufferSize];
+                    stream.Read(jsonBuffer);
+                    var jsonReader = new Utf8JsonReader(jsonBuffer);
                     var gameMessage = JsonSerializer.Deserialize<TcpGameMessage>(ref jsonReader);
 
                     if (gameMessage.operationName == "message")
@@ -154,7 +152,7 @@ namespace unitytest_tcpserver_client
                 // should actual message processeing be single threaded? Or should it relay again to correct "service" chat/clan/iap/gameLogic and then be "processed" for real?
             }
 
-            public void SendMessage(string message)
+            public bool SendMessage(string message)
             {
                 if (tcpClient.Connected == false)
                 {
@@ -176,7 +174,7 @@ namespace unitytest_tcpserver_client
 
                     var gameMessage = new TcpGameMessage()
                     {
-                        serviceName = "default",
+                        serviceName = "chat",
                         operationName = "message",
                         datamembers = new List<byte[]> { chatMessage.AsJsonBytes }
                     };
@@ -184,10 +182,12 @@ namespace unitytest_tcpserver_client
 
                     var stream = tcpClient.GetStream();
                     stream.Write(bytes);
+                    return true;
                 }
                 catch (IOException e)
                 {
                     Console.WriteLine(e.Message + e.InnerException?.Message);
+                    return false;
                 }
             }
         }
@@ -209,14 +209,11 @@ namespace unitytest_tcpserver_client
         {
             // replace names with enums with underlying int/byte?
 
-            // only properties are serialized
-            [JsonPropertyName("service")]
+            // only properties are serialized - Unity does the opposite...
             public string serviceName { get; set; }
 
-            [JsonPropertyName("func")]
             public string operationName { get; set; }
 
-            [JsonPropertyName("data")]
             public List<byte[]> datamembers { get; set; }
 
             [JsonIgnore]

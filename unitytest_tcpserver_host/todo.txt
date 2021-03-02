@@ -1,11 +1,8 @@
  --- current ---
 
- Maybe I'm wrongthinking it again. Maybe it should be more like I initially thought, but with asyncReads instead. So client doesn't have any listener. 
- Server gives the async some execution time (howto?). And communicates back via the same tcpClient class unless disconnected. Then ignore.
-  The question is still when should tcpClient be disposed if the request is already handled, but we want the server to relay messages to client without client asking for it.
-
-  tl:dr
-  ignore the planned thread sharing between sockets "don't tick/read more than needed". And just make it work for now. Don't need to handle +50k clients at this moment I guess
+ sockets seem to be working okisch can't really test because unitys json parser is awful... need replacement... 
+  - is it possible to force the .net core System.Text.Json into mono and il2cpp? Would be great
+  - else newtonsoft should work, seems to be slow but stable
 
  --- todo ---
 
@@ -40,3 +37,15 @@
 	(1 thread for read and 1 for write is fine. But if we accidentally have 2 thread for write is not fine)
 
  * force user syncronization? For reconnection
+
+
+
+ 
+ **
+
+ Maybe I'm wrongthinking it again. Maybe it should be more like I initially thought, but with asyncReads instead. So client doesn't have any listener. 
+ Server gives the async some execution time (howto?). And communicates back via the same tcpClient class unless disconnected. Then ignore.
+  The question is still when should tcpClient be disposed if the request is already handled, but we want the server to relay messages to client without client asking for it.
+
+  tl:dr
+  ignore the planned thread sharing between sockets "don't tick/read more than needed". And just make it work for now. Don't need to handle +50k clients at this moment I guess
