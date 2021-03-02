@@ -140,7 +140,7 @@ namespace Assets.Scripts.ServerService
                 {
                     try
                     {
-                        ChatMessage message = JsonUtilityUTF8Bytes.FromJson<ChatMessage>(serverMessage.datamembers[0]);
+                        ChatMessage message = JsonConvertUTF8Bytes.DeserializeObject<ChatMessage>(serverMessage.datamembers[0]);
                         return (Action)(() => { messageCallback(message); });
                     }
                     finally
@@ -162,7 +162,7 @@ namespace Assets.Scripts.ServerService
                 {
                     try
                     {
-                        ChatMessage message = JsonUtilityUTF8Bytes.FromJson<ChatMessage>(serverMessage.datamembers[0]);
+                        ChatMessage message = JsonConvertUTF8Bytes.DeserializeObject<ChatMessage>(serverMessage.datamembers[0]);
                         return (Action)(() => { userjoinCallback(message); });
                     }
                     finally

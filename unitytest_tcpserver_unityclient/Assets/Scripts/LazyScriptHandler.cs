@@ -17,6 +17,6 @@ public class LazyScriptHandler : MonoBehaviour
 
     public void RecieveChatMessage(string message)
     {
-        chatMessages.text += message;
+        chatMessages.text += message + "\n";
     }
 }

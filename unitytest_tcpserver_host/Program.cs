@@ -251,10 +251,10 @@ namespace unitytest_tcpserver_host
             // replace names with enums with underlying int/byte?
 
             // only properties are serialized - Unity does the opposite...
+            //[JsonPropertyName("service")]
             public string serviceName { get; set; }
 
             public string operationName { get; set; }
-
             public List<byte[]> datamembers { get; set; }
 
             [JsonIgnore]

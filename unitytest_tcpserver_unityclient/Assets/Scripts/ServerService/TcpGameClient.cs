@@ -7,6 +7,7 @@ using System.Threading;
 using System.Threading.Tasks;
 //using System.Text.Json;
 //using System.Text.Json.Serialization;
+using Newtonsoft.Json;
 using System.Globalization;
 using System.IO;
 using UnityEngine;
@@ -47,7 +48,6 @@ namespace unitytest_tcpserver_client
             Debug.Log($"Connected to server {serverEndPoint.Address}:{serverEndPoint.Port}");
             
             var stream = tcpClient.GetStream();
-            ThreadPool.QueueUserWorkItem(new WaitCallback(ReadIncomingStream<NetworkStream>), stream);
 
             try
             {
@@ -55,13 +55,8 @@ namespace unitytest_tcpserver_client
                 {
                     serviceName = "default",
                     operationName = "join",
-                    datamembers = new List<byte[]> { JsonUtilityUTF8Bytes.ToJson(userName) }
+                    datamembers = new List<byte[]> { JsonConvertUTF8Bytes.SerializeObject(userName) }
                 };
-
-                var test = JsonUtility.ToJson(userName);
-                var test2 = JsonUtility.ToJson(gameMessage);
-
-
 
                 var bytes = gameMessage.AsJsonBytes;
                 stream.Write(bytes, 0, bytes.Length);
@@ -70,6 +65,8 @@ namespace unitytest_tcpserver_client
             {
                 Debug.Log(e.Message + e.InnerException?.Message);
             }
+
+            ThreadPool.QueueUserWorkItem(new WaitCallback(ReadIncomingStream<NetworkStream>), stream);
         }
 
         public void Disconnect()
@@ -85,14 +82,10 @@ namespace unitytest_tcpserver_client
                 // recieve
                 T stream = (T)_stream;
                 // static size buffer, I think serverside .net core Span<byte> with jsonReader fixes this. But not tested.
+                // note :: might be possible to read byte directly similar to how server does it with bson reader - se imported JsonDotNet.pdf for example
                 byte[] jsonBuffer = new byte[readBufferSize];
                 stream.Read(jsonBuffer, 0, jsonBuffer.Length);
-                var gameMessage = JsonUtilityUTF8Bytes.FromJson<TcpGameMessage>(jsonBuffer);
-
-                var test0 = System.Text.Encoding.UTF8.GetString(jsonBuffer);
-                var test = JsonUtility.FromJson<TcpGameMessage>(test0);
-                var test0b = System.Text.Encoding.UTF8.GetString(test.datamembers[0]);
-                var test2 = JsonUtility.FromJson<ChatMessage>(test0b);
+                var gameMessage = JsonConvertUTF8Bytes.DeserializeObject<TcpGameMessage>(jsonBuffer); 
 
                 serverMessageQueue.Enqueue(gameMessage);
 
@@ -131,14 +124,14 @@ namespace unitytest_tcpserver_client
 
                 var gameMessage = new TcpGameMessage()
                 {
-                    serviceName = "default",
+                    serviceName = "chat",
                     operationName = "message",
                     datamembers = new List<byte[]> { chatMessage.AsJsonBytes }
                 };
                 var bytes = gameMessage.AsJsonBytes;
 
-                var test = JsonUtility.ToJson(chatMessage);
-                var test2 = JsonUtility.ToJson(gameMessage);
+                var test = JsonConvert.SerializeObject(chatMessage);
+                var test2 = JsonConvert.SerializeObject(gameMessage);
 
                 var stream = tcpClient.GetStream();
                 stream.Write(bytes, 0, bytes.Length);
@@ -156,15 +149,13 @@ namespace unitytest_tcpserver_client
     [Serializable]
     public class ChatMessage
     {
-        [field: SerializeField]
         public DateTime timestamp { get; set; }
-        [field: SerializeField]
         public string user { get; set; }
-        [field: SerializeField]
         public string message { get; set; }
-
-        public string AsJsonString => JsonUtility.ToJson(this);
-        public byte[] AsJsonBytes => JsonUtilityUTF8Bytes.ToJson(this);
+        [JsonIgnore]
+        public string AsJsonString => JsonConvert.SerializeObject(this);
+        [JsonIgnore]
+        public byte[] AsJsonBytes => JsonConvertUTF8Bytes.SerializeObject(this);
     }
 
     // if use this contract, make sure client/server are synced.
@@ -174,30 +165,29 @@ namespace unitytest_tcpserver_client
         // replace names with enums with underlying int/byte?
 
         // only properties are serialized
-        [field: SerializeField]
+        //[JsonProperty("service")]
         public string serviceName { get; set; }
 
-        [field: SerializeField]
         public string operationName { get; set; }
 
-        [field: SerializeField]
         public List<byte[]> datamembers { get; set; }
-
-        public string ChatMessageAsJsonString => JsonUtilityUTF8Bytes.FromJson<ChatMessage>(datamembers[0]).AsJsonString;
-        public byte[] AsJsonBytes => JsonUtilityUTF8Bytes.ToJson(this);
+        [JsonIgnore]
+        public string ChatMessageAsJsonString => JsonConvertUTF8Bytes.DeserializeObject<ChatMessage>(datamembers[0]).AsJsonString;
+        [JsonIgnore]
+        public byte[] AsJsonBytes => JsonConvertUTF8Bytes.SerializeObject(this);
     }
 
     // note :: have not tested if convert to utf8 is needed. But anyways, it's nice to have data parity in all environments.
-    public static class JsonUtilityUTF8Bytes
+    public static class JsonConvertUTF8Bytes
     {
-        public static byte[] ToJson(object obj)
+        public static byte[] SerializeObject(object obj)
         {
-            return System.Text.Encoding.UTF8.GetBytes(JsonUtility.ToJson(obj));
+            return System.Text.Encoding.UTF8.GetBytes(JsonConvert.SerializeObject(obj));
         }
 
-        public static T FromJson<T>(byte[] json)
+        public static T DeserializeObject<T>(byte[] json)
         {
-            return (T)JsonUtility.FromJson(System.Text.Encoding.UTF8.GetString(json), typeof(T));
+            return (T)JsonConvert.DeserializeObject(System.Text.Encoding.UTF8.GetString(json), typeof(T));
         }
     }
 }
