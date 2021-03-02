@@ -8,6 +8,7 @@ using System.Threading.Tasks;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Globalization;
+using System.IO;
 
 namespace unitytest_tcpserver_client
 {
@@ -22,10 +23,11 @@ namespace unitytest_tcpserver_client
         {
             CultureInfo.DefaultThreadCurrentUICulture = Thread.CurrentThread.CurrentUICulture = CultureInfo.InvariantCulture;
 
-            Console.WriteLine("Hello Client! Press <Enter> to connect to server.");
-            Console.ReadLine();
+            Console.WriteLine("Hello Client! Enter <name> to connect to server.");
+            var name = Console.ReadLine();
+            Console.WriteLine();
 
-            var client = new TcpGameClient(IPAddress.Parse(ipAdress), port);
+            var client = new TcpGameClient(IPAddress.Parse(ipAdress), port, name);
 
             client.InitTcpGameClient();
 
@@ -35,9 +37,6 @@ namespace unitytest_tcpserver_client
             string userInput = null;
             while (programRunning)
             {
-                Console.WriteLine();
-                Console.WriteLine("Send data to server.");
-                Console.WriteLine();
                 userInput = Console.ReadLine();
 
                 if (userInput == "-1" || userInput == "exit" || userInput == "close")
@@ -51,13 +50,13 @@ namespace unitytest_tcpserver_client
             }
 
             // note :: should this be done more similar to a while true .read()? - see comment in ListenIncomingClients
-            static void CheckGameMessagesForClient(TcpGameClient client) 
-            {
-                client.CheckStreamDataAvaliable();
+            //static void CheckGameMessagesForClient(TcpGameClient client) 
+            //{
+            //    client.CheckStreamDataAvaliable();
 
-                Thread.Sleep(clientGameMessageCheckFrequency); // todo :: only sleep if we have already processed all requests fast enough. Else continue working!
-                ThreadPool.QueueUserWorkItem(CheckGameMessagesForClient, client, false);
-            }
+            //    Thread.Sleep(clientGameMessageCheckFrequency); // todo :: only sleep if we have already processed all requests fast enough. Else continue working!
+            //    ThreadPool.QueueUserWorkItem(CheckGameMessagesForClient, client, false);
+            //}
 
             // todo :: read console, send to server
         }
@@ -67,42 +66,53 @@ namespace unitytest_tcpserver_client
             // todo :: we should have some depency injection for what services can be used / data can be sent (emulate wcf structure?)
             // todo :: or maybe just send data forward to some service, and that service has the depency injection.
             public TcpClient tcpClient = null;
+            public TcpListener tcpListener = null;
             public const int readBufferSize = 8192;
             public IPAddress ipAdress;
-            public int port;
+            public int serverPort;
+            public int clientPort = 0;
+            public string userName = "unknown";
 
 
             private TcpGameClient() {;}
-            public TcpGameClient(IPAddress ipAdress, int port)
+            public TcpGameClient(IPAddress ipAdress, int port, string userName = "unknown")
             {
                 this.ipAdress = ipAdress;
-                this.port = port;
+                this.serverPort = port;
+                this.userName = userName;
             }
 
             public void InitTcpGameClient()
             {
-                tcpClient = new TcpClient(new IPEndPoint(ipAdress, 0));
-                tcpClient.Connect(new IPEndPoint(ipAdress, port));
+                tcpClient = new TcpClient(new IPEndPoint(ipAdress, clientPort));
+                tcpClient.Connect(new IPEndPoint(ipAdress, serverPort));
 
                 // todo :: handle failures to connect
 
-
-
                 IPEndPoint serverEndPoint = tcpClient.Client.RemoteEndPoint as IPEndPoint;
+                clientPort = ((IPEndPoint)tcpClient.Client.LocalEndPoint).Port;
                 Console.WriteLine($"Connected to server {serverEndPoint.Address}:{serverEndPoint.Port}");
                 Console.WriteLine();
-            }
 
-            public void CheckStreamDataAvaliable()
-            {
-                if (tcpClient.Connected == false) return;
+                var stream = tcpClient.GetStream();
+                ThreadPool.QueueUserWorkItem(ReadIncomingStream, stream, true);
 
-                using (var stream = tcpClient.GetStream())
+                try
                 {
-                    ReadIncomingStream(stream);
+                    var gameMessage = new TcpGameMessage()
+                    {
+                        serviceName = "default",
+                        operationName = "join",
+                        datamembers = new List<byte[]> { JsonSerializer.SerializeToUtf8Bytes(userName) }
+                    };
+                    var bytes = gameMessage.AsJsonBytes;
+                    stream.Write(bytes);
+                }
+                catch (IOException e)
+                {
+                    Console.WriteLine(e.Message + e.InnerException?.Message);
                 }
             }
-
 
             public void Disconnect()
             {
@@ -110,19 +120,33 @@ namespace unitytest_tcpserver_client
             }
 
             // todo :: relay request to "processIncomingStream" or similar.
-            public void ReadIncomingStream(NetworkStream stream)  // fake type safety
+            public void ReadIncomingStream(NetworkStream stream) 
             {
-                // recieve
-                Span<byte> jsonSpan = new byte[readBufferSize];
-                stream.Read(jsonSpan);
-                var jsonReader = new Utf8JsonReader(jsonSpan);
-                var gameMessage = JsonSerializer.Deserialize<TcpGameMessage>(ref jsonReader);
+                try
+                {
+                    // recieve
+                    Span<byte> jsonSpan = new byte[readBufferSize];
+                    stream.Read(jsonSpan);
+                    var jsonReader = new Utf8JsonReader(jsonSpan);
+                    var gameMessage = JsonSerializer.Deserialize<TcpGameMessage>(ref jsonReader);
 
-                Console.WriteLine($"Client recieved: {gameMessage.serviceName} + {gameMessage.operationName} + {gameMessage.ChatMessageAsJsonString}");
+                    if (gameMessage.operationName == "message")
+                    {
+                        var chatMessage = JsonSerializer.Deserialize<ChatMessage>(gameMessage.datamembers[0]);
 
-                // send back same message
-                //var bytes = JsonSerializer.SerializeToUtf8Bytes<TcpRequest>(request);
-                //stream.Write(bytes);
+                        Console.WriteLine($"[{chatMessage.timestamp.Hour}:{chatMessage.timestamp.Minute}]<{chatMessage.user}>: {chatMessage.message}");
+
+                    }
+                    else
+                    {
+                        Console.WriteLine("unknown operation from server " + gameMessage.serviceName + " " + gameMessage.operationName);
+                    }
+                    ThreadPool.QueueUserWorkItem(ReadIncomingStream, stream, true);
+                }
+                catch (IOException e)
+                {
+                    Console.WriteLine(e.Message + e.InnerException?.Message);
+                }
             }
 
             public void ProcessIncomingStream()
@@ -134,51 +158,37 @@ namespace unitytest_tcpserver_client
             {
                 if (tcpClient.Connected == false)
                 {
-                    Console.WriteLine("ERROR: not connected to server!");
+                    tcpClient.Dispose();
+                    Console.WriteLine(" ------- not connected to server!");
+
+                    InitTcpGameClient();
                     Console.WriteLine();
-                    return;
                 }
 
-                //Task.Run(() =>
-                //{
-                    try
+                try
+                {
+                    var chatMessage = new ChatMessage()
                     {
-                        var chatMessage = new ChatMessage()
-                        {
-                            timestamp = DateTime.Now,
-                            user = "Tobias",
-                            message = message
-                        };
+                        timestamp = DateTime.Now,
+                        user = userName,
+                        message = message
+                    };
 
-                        var gameMessage = new TcpGameMessage()
-                        {
-                            serviceName = "default",
-                            operationName = "message",
-                            datamembers = new List<byte[]> { JsonSerializer.SerializeToUtf8Bytes<ChatMessage>(chatMessage) }
-                        };
-                        var bytes = JsonSerializer.SerializeToUtf8Bytes<TcpGameMessage>(gameMessage);
+                    var gameMessage = new TcpGameMessage()
+                    {
+                        serviceName = "default",
+                        operationName = "message",
+                        datamembers = new List<byte[]> { chatMessage.AsJsonBytes }
+                    };
+                    var bytes = gameMessage.AsJsonBytes;
 
-                        Console.WriteLine($"Client sending: {gameMessage.serviceName} + {gameMessage.operationName} + {gameMessage.ChatMessageAsJsonString}");
-
-                        Console.WriteLine(JsonSerializer.Deserialize<TcpGameMessage>(bytes).ChatMessageAsJsonString);
-
-                        var stream = tcpClient.GetStream();
-                        stream.Write(bytes);
-                        // temp :: for testing only
-                        ReadIncomingStream(stream);
+                    var stream = tcpClient.GetStream();
+                    stream.Write(bytes);
                 }
-                finally
-                    {
-                        try
-                        {
-                            ;
-                        }
-                        catch (Exception e)
-                        {
-                            ;
-                        }
-                    }
-                //});
+                catch (IOException e)
+                {
+                    Console.WriteLine(e.Message + e.InnerException?.Message);
+                }
             }
         }
 
@@ -190,11 +200,15 @@ namespace unitytest_tcpserver_client
 
             [JsonIgnore]
             public string AsJsonString => JsonSerializer.Serialize(this);
+            [JsonIgnore]
+            public byte[] AsJsonBytes => JsonSerializer.SerializeToUtf8Bytes(this);
         }
 
-            // if use this contract, make sure client/server are synced.
+        // if use this contract, make sure client/server are synced.
         public class TcpGameMessage
         {
+            // replace names with enums with underlying int/byte?
+
             // only properties are serialized
             [JsonPropertyName("service")]
             public string serviceName { get; set; }
@@ -207,6 +221,8 @@ namespace unitytest_tcpserver_client
 
             [JsonIgnore]
             public string ChatMessageAsJsonString => JsonSerializer.Deserialize<ChatMessage>(datamembers[0]).AsJsonString;
+            [JsonIgnore]
+            public byte[] AsJsonBytes => JsonSerializer.SerializeToUtf8Bytes(this);
         }
     }
 }

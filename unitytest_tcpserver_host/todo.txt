@@ -1,22 +1,18 @@
-todo :: write todo list
+ --- current ---
 
+ Maybe I'm wrongthinking it again. Maybe it should be more like I initially thought, but with asyncReads instead. So client doesn't have any listener. 
+ Server gives the async some execution time (howto?). And communicates back via the same tcpClient class unless disconnected. Then ignore.
+  The question is still when should tcpClient be disposed if the request is already handled, but we want the server to relay messages to client without client asking for it.
 
-Now base functionality is working. We can start to add back / figure out why the connection was dropped.
+  tl:dr
+  ignore the planned thread sharing between sockets "don't tick/read more than needed". And just make it work for now. Don't need to handle +50k clients at this moment I guess
 
-Maybe it was not a total threading issue, only the other issues that stopped it from working as expected.
+ --- todo ---
 
-Next steps should probably be to:
+ * refactoring
 
- * figure out how to continuously listen on messages from the client. But without permanently listening to read request. 
-	- We want to be able to have 50k clients, but not listen to 50k clients at the same time.
-
- * figure out if it is possible to send (write) message and listen to listen (read) in different threads without issues
-
- * reconnect functionality if needed
-
-
-Later steps
-
+ * little better error handling
+ 
  * more service like for game
 
  * implement in Unity
@@ -25,8 +21,22 @@ Later steps
  * host somewhere to test real life case
 
 
-Later Later Later steps
-
+ --- todo later ---
+ 
  * make multiple services - game / chat / etc.
+ 
+ * make an actual game - current plan is shared painting + chat
 
- * make an actual game
+ * figure out how to continuously listen on messages from the client. But without permanently listening to read request. 
+	- We want to be able to have 50k clients, but not listen to 50k clients at the same time.
+
+
+ --- think about ---
+
+ * what should the datapackages contain? How to share same structure? (wcf like with libfile?)
+
+ * how to distribute between each service
+  - and how to make sure the server does not send to much small update data packages. 
+	(1 thread for read and 1 for write is fine. But if we accidentally have 2 thread for write is not fine)
+
+ * force user syncronization? For reconnection
