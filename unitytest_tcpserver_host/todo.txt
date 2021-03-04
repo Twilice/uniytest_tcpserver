@@ -1,10 +1,14 @@
  --- current ---
 
+ * fix webclient json issues.
+  - not sure if it's json converting or byte encoding is the issue. Or if it tries to do some kind of doubleencoding with datamembers and causes issue.
+ 
  * look into possibility to include support for webgl (websocket)
 https://developer.mozilla.org/en-US/docs/Web/API/WebSockets_API/Writing_WebSocket_server
 
-* host somewhere to test real life case
- - also include test from android .apk
+ * host somewhere to test real life case
+  - also include test from android .apk
+  - also test if ws (http) work outside of localhost, and then check if we can get https working. Or if that is more of a server IT issue rather than coding issue.
 
  --- todo ---
 
@@ -24,7 +28,8 @@ https://developer.mozilla.org/en-US/docs/Web/API/WebSockets_API/Writing_WebSocke
 
  * figure out how to continuously listen on messages from the client. But without permanently listening to read request. 
 	- We want to be able to have 50k clients, but not listen to 50k clients at the same time.
-
+ 
+ * dispose tcpClients if they are disconnected... now we only do it in broadcast. (not fixed yet duo some confusion how socket/tcpClient/stream resources should be disposed correctly)
 
  --- think about ---
 

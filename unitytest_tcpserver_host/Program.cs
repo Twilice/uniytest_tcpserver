@@ -10,6 +10,8 @@ using System.Text.Json.Serialization;
 using System.Globalization;
 using System.Linq;
 using System.IO;
+using System.Net.WebSockets;
+using System.Linq.Expressions;
 
 namespace unitytest_tcpserver_host
 {
@@ -52,8 +54,12 @@ namespace unitytest_tcpserver_host
         // todo :: we should have some depency injection for what services can be used / data can be sent (emulate wcf structure?)
         // todo :: or maybe just send data forward to some service, and that service has the depency injection.
         public Thread tcpListenThread;
+        public Thread websocketListenThread;
         public TcpListener tcpListener;
-        public ConcurrentDictionary<EndPoint, TcpClient> tcpClients = null;
+        public HttpListener httpListener;
+
+        public ConcurrentDictionary<IPEndPoint, TcpClient> tcpClients = null;
+        public ConcurrentDictionary<IPEndPoint, WebSocket> webClients = null;
         public const int readBufferSize = 8192;
         public IPAddress ipAdress;
         public int port;
@@ -71,12 +77,18 @@ namespace unitytest_tcpserver_host
 
         public void InitTcpGameServer()
         {
-            tcpClients = new ConcurrentDictionary<EndPoint, TcpClient>();
+            tcpClients = new ConcurrentDictionary<IPEndPoint, TcpClient>();
             // todo :: adress and port should be in config file.
 
             tcpListenThread = new Thread(new ThreadStart(ListenIncomingClients));
             tcpListenThread.IsBackground = true;
             tcpListenThread.Start();
+
+            webClients = new ConcurrentDictionary<IPEndPoint, WebSocket>();
+
+            websocketListenThread = new Thread(new ThreadStart(ListenIncomingWebsocketClient));
+            websocketListenThread.IsBackground = true;
+            websocketListenThread.Start();
         }
 
         //public void CheckStreamDataAvaliable()
@@ -117,17 +129,74 @@ namespace unitytest_tcpserver_host
                 // todo :: handle failures to connect
                 client.ReceiveBufferSize = readBufferSize;
 
+
                 IPEndPoint clientEndPoint = client.Client.RemoteEndPoint as IPEndPoint;
                 Console.WriteLine($"Client connected from {clientEndPoint.Address}:{clientEndPoint.Port}");
                 
                 tcpClients[clientEndPoint] = client;              
 
                 var stream = client.GetStream();
+
                 ThreadPool.QueueUserWorkItem(ReadIncomingStream, stream, true);
             }
         }
 
-      
+        public void ListenIncomingWebsocketClient()
+        {
+            httpListener = new HttpListener();
+            httpListener.Prefixes.Add($"http://{ipAdress}/");
+            httpListener.Prefixes.Add($"https://{ipAdress}/");
+            httpListener.Start();
+
+            while (listeningToClients)
+            {
+                var listenContext = httpListener.GetContext();
+                IPEndPoint clientEndPoint = listenContext.Request.RemoteEndPoint;
+                var task = listenContext.AcceptWebSocketAsync(null, TimeSpan.FromSeconds(10));
+                var webSocketClient = task.Result.WebSocket; // result is blocking
+                Console.WriteLine($"Client connected from {clientEndPoint.Address}:{clientEndPoint.Port}");
+                webClients[clientEndPoint] = webSocketClient;
+
+                ThreadPool.QueueUserWorkItem(ReadIncomingWebSocketMessage, (clientEndPoint, webSocketClient), true);
+            }
+        }
+
+        public void ReadIncomingWebSocketMessage((IPEndPoint endpoint, WebSocket socket) webClient)
+        {
+            try
+            {
+                Memory<byte> buffer = new Memory<byte>(new byte[readBufferSize]); // todo :: heap allocated every frame, maybe reserve memory per client instead?
+                var recieve = webClient.socket.ReceiveAsync(buffer, CancellationToken.None);
+                var res = recieve.Result;
+                var eof = res.EndOfMessage;
+
+                if (eof == false)
+                {
+                    Console.WriteLine("Important! ----- buffer to small. Increase buffer size or read message in chunks."); // todo :: dynamic buffer size? both for socket and tcp.
+                }
+
+                if (res.MessageType == WebSocketMessageType.Close)
+                {
+                    // note :: is this correct? Documentation says initaite or complete the close handshake. So assume client wants to know everything went ok? Or is that done under da hood?
+                    webClient.socket.CloseOutputAsync(WebSocketCloseStatus.NormalClosure, "client initiated disconnect", CancellationToken.None).Wait();
+                    webClients.TryRemove(webClient.endpoint, out _);
+                }
+
+                var jsonReader = new Utf8JsonReader(buffer.Span); // todo :: not sure if buffer here is the json payload from websocket
+                var gameMessage = JsonSerializer.Deserialize<NetworkGameMessage>(ref jsonReader);
+
+                ProcessIncomingGameMessage(gameMessage);
+
+                ThreadPool.QueueUserWorkItem(ReadIncomingWebSocketMessage, webClient, true);
+                //// todo :: handle stream / tcp package failures and json serialize failures etc.
+            }
+            catch (JsonException e)
+            {
+                Console.WriteLine(e.Message + e.InnerException?.Message);
+            }
+        }
+
+
 
         public void DisconnectTcpClient(TcpClient clientToDisconenct)
         {
@@ -144,7 +213,7 @@ namespace unitytest_tcpserver_host
                 Span<byte> jsonBuffer = new byte[readBufferSize];
                 stream.Read(jsonBuffer);
                 var jsonReader = new Utf8JsonReader(jsonBuffer);
-                var gameMessage = JsonSerializer.Deserialize<TcpGameMessage>(ref jsonReader);
+                var gameMessage = JsonSerializer.Deserialize<NetworkGameMessage>(ref jsonReader);
                 //// todo :: handle stream / tcp package failures and json serialize failures etc.
 
                 ProcessIncomingGameMessage(gameMessage);
@@ -162,7 +231,7 @@ namespace unitytest_tcpserver_host
             }
         }
 
-        public void ProcessIncomingGameMessage(TcpGameMessage gameMessage)
+        public void ProcessIncomingGameMessage(NetworkGameMessage gameMessage)
         {
             // should actual message processeing be single threaded? Or should it relay again to correct "service" chat/clan/iap/gameLogic and then be "processed" for real?
             // temp :: send back same message
@@ -194,6 +263,7 @@ namespace unitytest_tcpserver_host
         {
             Console.WriteLine($"[{message.timestamp.Hour}:{message.timestamp.Minute}]<{message.user}>: {message.message}");
 
+
             Parallel.ForEach(tcpClients, client =>
             {
                 TcpClient tcpClient = client.Value;
@@ -202,7 +272,7 @@ namespace unitytest_tcpserver_host
                     // can we remove while iterating? .values should be a copy of the values and we remove keys so should be fine.
                     var clientEndpoint = client.Key;
 
-                    tcpClients.Remove(clientEndpoint, out var disposeClient); // - this should point to tcpClient
+                    tcpClients.TryRemove(clientEndpoint, out _); // - this should point to tcpClient
                     //disposeClient.Dispose(); // bug :: howto dispose everything correctly? I get errors when I try to "gracefully" dispose...
 
                     return;
@@ -211,8 +281,8 @@ namespace unitytest_tcpserver_host
                 try
                 {
                     var stream = tcpClient.GetStream();
-                    var tcpMessage = new TcpGameMessage() { serviceName = "chat", operationName = "message", datamembers = new List<byte[]> { message.AsJsonBytes } };
-                    stream.Write(tcpMessage.AsJsonBytes);
+                    var networkMessage = new NetworkGameMessage() { serviceName = "chat", operationName = "message", datamembers = new List<byte[]> { message.AsJsonBytes } };
+                    stream.Write(networkMessage.AsJsonBytes);
                 }
                 catch (JsonException e)
                 {
@@ -225,6 +295,38 @@ namespace unitytest_tcpserver_host
                     Console.WriteLine(e.Message + e.InnerException?.Message);
                 }
 
+            });
+
+            Parallel.ForEach(webClients, client =>
+            {
+                WebSocket webClient = client.Value;
+                if (webClient.State != WebSocketState.Open)
+                {
+                    // can we remove while iterating? .values should be a copy of the values and we remove keys so should be fine.
+                    var clientUri = client.Key;
+
+                    webClients.TryRemove(clientUri, out _); // - this should point to tcpClient
+                    //disposeClient.Dispose(); // bug :: howto dispose everything correctly? I get errors when I try to "gracefully" dispose...
+
+                    return;
+                }
+
+                try
+                {
+                    var networkMessage = new NetworkGameMessage() { serviceName = "chat", operationName = "message", datamembers = new List<byte[]> { message.AsJsonBytes } };
+
+                    webClient.SendAsync(networkMessage.AsJsonBytes, WebSocketMessageType.Binary, true, CancellationToken.None).Wait();
+                }
+                catch (JsonException e)
+                {
+                    // todo :: dispose of client? What to do with incorrect json... Many environments will likely cause issue.
+                    Console.WriteLine(e.Message + e.InnerException?.Message);
+                }
+                catch (IOException e)
+                {
+                    // todo :: dispose of client? Or is error because client already is disposed?
+                    Console.WriteLine(e.Message + e.InnerException?.Message);
+                }
             });
         }
 
@@ -246,7 +348,7 @@ namespace unitytest_tcpserver_host
         }
 
         // if use this contract, make sure client/server are synced.
-        public class TcpGameMessage
+        public class NetworkGameMessage
         {
             // replace names with enums with underlying int/byte?
 
@@ -259,6 +361,8 @@ namespace unitytest_tcpserver_host
 
             [JsonIgnore]
             public string ChatMessageAsJsonString => JsonSerializer.Deserialize<ChatMessage>(datamembers[0]).AsJsonString;
+            [JsonIgnore]
+            public string AsJsonString => JsonSerializer.Serialize(this);
             [JsonIgnore]
             public byte[] AsJsonBytes => JsonSerializer.SerializeToUtf8Bytes(this);
         }

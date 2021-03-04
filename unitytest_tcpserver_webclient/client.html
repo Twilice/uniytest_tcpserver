@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="X-UA-Compatible" content="ie=edge">
+    <title>Document</title>
+    <script>
+        const utf8encoder = new TextEncoder();
+        const utf8decoder = new TextDecoder();
+
+        var gameMessage = {
+            serviceName: "chat",
+            operationName: "join",
+            datamembers: [utf8encoder.encode("browserWebClient")]
+        };
+
+        // todo :: how to wss (https), ws probably only works because local.
+        var exampleSocket = new WebSocket("ws://127.0.0.1");
+
+        exampleSocket.onopen = function (e) {
+            console.log("connected");
+            let msg = JSON.stringify(gameMessage);
+            console.log(msg);
+            exampleSocket.send(utf8encoder.encode(msg));
+        }
+        exampleSocket.onmessage = function (bytestream) {
+            console.log(bytestream);
+            let msg = utf8decoder.decode(bytestream);
+            console.log(msg);
+            console.log("serviceName" + msg.serviceName);
+            console.log("operationName" + msg.operationName);
+            console.log("datamembers" + JSON.parse(msg.datamembers[0]));
+        }
+    </script>
+</head>
+<body>
+    
+</body>
+</html>

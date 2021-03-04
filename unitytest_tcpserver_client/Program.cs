@@ -218,6 +218,9 @@ namespace unitytest_tcpserver_client
 
             [JsonIgnore]
             public string ChatMessageAsJsonString => JsonSerializer.Deserialize<ChatMessage>(datamembers[0]).AsJsonString;
+
+            [JsonIgnore]
+            public string AsJsonString => JsonSerializer.Serialize(this);
             [JsonIgnore]
             public byte[] AsJsonBytes => JsonSerializer.SerializeToUtf8Bytes(this);
         }
