@@ -26,7 +26,6 @@ namespace unitytest_tcpserver_host
 
             Console.WriteLine("Hello Server! Awaiting clients.");
 
-    
             var server = new TcpGameServer(IPAddress.Parse(ipAdress), port);
 
             server.InitTcpGameServer();
@@ -231,11 +230,9 @@ namespace unitytest_tcpserver_host
             }
         }
 
+        // message processeing should probably be in it's own thread instead of socketthread? Or should it relay again to correct "service" chat/clan/iap/gameLogic and then be "processed" for real?
         public void ProcessIncomingGameMessage(NetworkGameMessage gameMessage)
         {
-            // should actual message processeing be single threaded? Or should it relay again to correct "service" chat/clan/iap/gameLogic and then be "processed" for real?
-            // temp :: send back same message
-
             Console.WriteLine($"Server recieved: {gameMessage.serviceName} + {gameMessage.operationName}");
 
             if (gameMessage.operationName == "message")
@@ -253,6 +250,10 @@ namespace unitytest_tcpserver_host
                     user = "server",
                     message = $"new client <{userName}> joined the server"
                 });
+            }
+            else if (gameMessage.operationName == "parsemessagetest")
+            {
+                var chatMessage = JsonSerializer.Deserialize<ChatMessage>(gameMessage.datamembers[0]);
             }
 
             //var bytes = JsonSerializer.SerializeToUtf8Bytes<TcpGameMessage>(gameMessage);
@@ -281,7 +282,16 @@ namespace unitytest_tcpserver_host
                 try
                 {
                     var stream = tcpClient.GetStream();
-                    var networkMessage = new NetworkGameMessage() { serviceName = "chat", operationName = "message", datamembers = new List<byte[]> { message.AsJsonBytes } };
+                    var networkMessage = new NetworkGameMessage() { serviceName = "chat", operationName = "message", datamembers = new List<string> { message.AsJsonString } };
+
+                    // debug bytes
+                    //Console.WriteLine(networkMessage.AsJsonString);
+                    //var bytes = networkMessage.AsJsonBytes;
+                    //foreach (var b in bytes)
+                    //    Console.Write(b + " ");
+                    //Console.WriteLine();
+                    //Console.WriteLine();
+
                     stream.Write(networkMessage.AsJsonBytes);
                 }
                 catch (JsonException e)
@@ -313,7 +323,7 @@ namespace unitytest_tcpserver_host
 
                 try
                 {
-                    var networkMessage = new NetworkGameMessage() { serviceName = "chat", operationName = "message", datamembers = new List<byte[]> { message.AsJsonBytes } };
+                    var networkMessage = new NetworkGameMessage() { serviceName = "chat", operationName = "message", datamembers = new List<string> { message.AsJsonString } };
 
                     webClient.SendAsync(networkMessage.AsJsonBytes, WebSocketMessageType.Binary, true, CancellationToken.None).Wait();
                 }
@@ -357,7 +367,9 @@ namespace unitytest_tcpserver_host
             public string serviceName { get; set; }
 
             public string operationName { get; set; }
-            public List<byte[]> datamembers { get; set; }
+            public List<string> datamembers { get; set; }
+            
+            //public List<byte[]> datamembers { get; set; } // to much issue to get javascript to encode/decode like this. Also my brain hurts trying to read the bytes.
 
             [JsonIgnore]
             public string ChatMessageAsJsonString => JsonSerializer.Deserialize<ChatMessage>(datamembers[0]).AsJsonString;

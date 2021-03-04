@@ -97,11 +97,11 @@ namespace unitytest_tcpserver_client
 
                 try
                 {
-                    var gameMessage = new TcpGameMessage()
+                    var gameMessage = new NetworkGameMessage()
                     {
                         serviceName = "default",
                         operationName = "join",
-                        datamembers = new List<byte[]> { JsonSerializer.SerializeToUtf8Bytes(userName) }
+                        datamembers = new List<string> { JsonSerializer.Serialize(userName) }
                     };
                     var bytes = gameMessage.AsJsonBytes;
                     stream.Write(bytes);
@@ -126,7 +126,7 @@ namespace unitytest_tcpserver_client
                     Span<byte> jsonBuffer = new byte[readBufferSize];
                     stream.Read(jsonBuffer);
                     var jsonReader = new Utf8JsonReader(jsonBuffer);
-                    var gameMessage = JsonSerializer.Deserialize<TcpGameMessage>(ref jsonReader);
+                    var gameMessage = JsonSerializer.Deserialize<NetworkGameMessage>(ref jsonReader);
 
                     if (gameMessage.operationName == "message")
                     {
@@ -172,11 +172,11 @@ namespace unitytest_tcpserver_client
                         message = message
                     };
 
-                    var gameMessage = new TcpGameMessage()
+                    var gameMessage = new NetworkGameMessage()
                     {
                         serviceName = "chat",
                         operationName = "message",
-                        datamembers = new List<byte[]> { chatMessage.AsJsonBytes }
+                        datamembers = new List<string> { chatMessage.AsJsonString }
                     };
                     var bytes = gameMessage.AsJsonBytes;
 
@@ -205,20 +205,21 @@ namespace unitytest_tcpserver_client
         }
 
         // if use this contract, make sure client/server are synced.
-        public class TcpGameMessage
+        public class NetworkGameMessage
         {
             // replace names with enums with underlying int/byte?
 
             // only properties are serialized - Unity does the opposite...
+            //[JsonPropertyName("service")]
             public string serviceName { get; set; }
 
             public string operationName { get; set; }
+            public List<string> datamembers { get; set; }
 
-            public List<byte[]> datamembers { get; set; }
+            //public List<byte[]> datamembers { get; set; } // to much issue to get javascript to encode/decode like this. Also my brain hurts trying to read the bytes.
 
             [JsonIgnore]
             public string ChatMessageAsJsonString => JsonSerializer.Deserialize<ChatMessage>(datamembers[0]).AsJsonString;
-
             [JsonIgnore]
             public string AsJsonString => JsonSerializer.Serialize(this);
             [JsonIgnore]

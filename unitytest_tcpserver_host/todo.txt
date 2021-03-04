@@ -1,8 +1,10 @@
  --- current ---
 
- * fix webclient json issues.
-  - not sure if it's json converting or byte encoding is the issue. Or if it tries to do some kind of doubleencoding with datamembers and causes issue.
- 
+ * json communication finally established between server + javascript client.
+  - needs mayor refactor + cleaning
+  - test send chatmessage via html <input>
+  - map unity with javascript and pray we won't have as much json parse issues again.
+
  * look into possibility to include support for webgl (websocket)
 https://developer.mozilla.org/en-US/docs/Web/API/WebSockets_API/Writing_WebSocket_server
 

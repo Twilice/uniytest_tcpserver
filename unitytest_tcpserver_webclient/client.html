@@ -7,12 +7,14 @@
     <title>Document</title>
     <script>
         const utf8encoder = new TextEncoder();
-        const utf8decoder = new TextDecoder();
+        const utf8decoder = new TextDecoder("utf-8");
 
+        var encodedUsrName = utf8encoder.encode('"browserWebClient"');
+        var usrName = '"browserWebClient"';
         var gameMessage = {
             serviceName: "chat",
             operationName: "join",
-            datamembers: [utf8encoder.encode("browserWebClient")]
+            datamembers: [usrName] // this encoding is issue, is it server that does it wrong or is it client? not encoding doesn't work, encoding doesn't work...
         };
 
         // todo :: how to wss (https), ws probably only works because local.
@@ -24,13 +26,51 @@
             console.log(msg);
             exampleSocket.send(utf8encoder.encode(msg));
         }
-        exampleSocket.onmessage = function (bytestream) {
-            console.log(bytestream);
-            let msg = utf8decoder.decode(bytestream);
-            console.log(msg);
-            console.log("serviceName" + msg.serviceName);
-            console.log("operationName" + msg.operationName);
-            console.log("datamembers" + JSON.parse(msg.datamembers[0]));
+        exampleSocket.onmessage = function (event) {
+            let blob = event.data;
+            // var text = await blob.text(); // if blocking is ok
+            var networkGameMessage;
+            blob.text().then(text => {
+                var parsingServerMessage = JSON.parse(text);
+                // if (parsingServerMessage.datamembers) {
+                //     var arr = [];
+                //     parsingServerMessage.datamembers.forEach(m =>
+                //         arr.push(JSON.parse(m)) 
+                //     );
+                //     parsingServerMessage.datamembers = arr; // we have to go deeper xd
+                // }
+                networkGameMessage = parsingServerMessage;
+                msgFromServer = networkGameMessage;
+                console.log("from server: ");
+                console.log(networkGameMessage);
+                // sendback same message for test
+                //if (networkGameMessage.datamembers[0].user != "server"){
+                    // networkGameMessage.datamembers[0].user = "browserWebClient";
+                    console.log("to server: ");
+                    console.log(networkGameMessage);
+                    networkGameMessage.operationName = "parsemessagetest";
+                    sendmessage(networkGameMessage);
+                //}
+            });
+
+        }
+        var msgFromServer;
+
+        function sendmessage(obj) {
+            let jsonstring = JSON.stringify(obj);
+            console.log("to server json: ");
+            console.log(jsonstring);
+            console.log("to server json utf8byte: ");
+            console.log(utf8encoder.encode(jsonstring));
+
+            // debug bytes
+            // var str = "";
+            // utf8encoder.encode(jsonstring).forEach(b =>
+            // {
+            //     str = str + b + " ";
+            // });
+            // console.log(str);
+            exampleSocket.send(utf8encoder.encode(jsonstring));
         }
     </script>
 </head>
