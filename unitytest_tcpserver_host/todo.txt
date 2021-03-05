@@ -1,5 +1,7 @@
  --- current ---
 
+ fix  error server crash because websocket timeout
+
  * json communication finally established between server + javascript client.
   - needs mayor refactor + cleaning
   - test send chatmessage via html <input>
@@ -20,7 +22,12 @@ https://developer.mozilla.org/en-US/docs/Web/API/WebSockets_API/Writing_WebSocke
  
  * more service like for game
   
+* fix
+---- > '0x00' is an invalid start of a value. Path: $ | LineNumber: 0 | BytePositionInLine: 0.'0x00' is an invalid start of a value. LineNumber: 0 | BytePositionInLine: 0.
+ when webclient is closed/refreshed
 
+ * javascript timezone.
+	- not important, we don't actually care about pure html? It should just send to unity anyways?
 
  --- todo later ---
  

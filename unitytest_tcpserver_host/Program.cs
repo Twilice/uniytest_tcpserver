@@ -309,6 +309,9 @@ namespace unitytest_tcpserver_host
 
             Parallel.ForEach(webClients, client =>
             {
+                /* error :: error can occur crashing server, example sometimes when browser reconnect or timeout?
+                exception ---> System.Net.HttpListenerException (1229): An operation was attempted on a nonexistent network connection.
+                            at System.Net.WebSockets.WebSocketHttpListenerDuplexStream.WriteAsyncFast(HttpListenerAsyncEventArgs eventArgs) */
                 WebSocket webClient = client.Value;
                 if (webClient.State != WebSocketState.Open)
                 {

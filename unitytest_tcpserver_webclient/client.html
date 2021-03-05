@@ -8,73 +8,110 @@
     <script>
         const utf8encoder = new TextEncoder();
         const utf8decoder = new TextDecoder("utf-8");
+        var websocket;
 
-        var encodedUsrName = utf8encoder.encode('"browserWebClient"');
-        var usrName = '"browserWebClient"';
-        var gameMessage = {
-            serviceName: "chat",
-            operationName: "join",
-            datamembers: [usrName] // this encoding is issue, is it server that does it wrong or is it client? not encoding doesn't work, encoding doesn't work...
-        };
-
-        // todo :: how to wss (https), ws probably only works because local.
-        var exampleSocket = new WebSocket("ws://127.0.0.1");
-
-        exampleSocket.onopen = function (e) {
-            console.log("connected");
-            let msg = JSON.stringify(gameMessage);
-            console.log(msg);
-            exampleSocket.send(utf8encoder.encode(msg));
+        function ToNestedJsonText(text) { // javascript nested json parsing lul
+            return "\"" + text + "\"";
         }
-        exampleSocket.onmessage = function (event) {
-            let blob = event.data;
-            // var text = await blob.text(); // if blocking is ok
-            var networkGameMessage;
-            blob.text().then(text => {
-                var parsingServerMessage = JSON.parse(text);
-                // if (parsingServerMessage.datamembers) {
-                //     var arr = [];
-                //     parsingServerMessage.datamembers.forEach(m =>
-                //         arr.push(JSON.parse(m)) 
-                //     );
-                //     parsingServerMessage.datamembers = arr; // we have to go deeper xd
-                // }
-                networkGameMessage = parsingServerMessage;
-                msgFromServer = networkGameMessage;
-                console.log("from server: ");
-                console.log(networkGameMessage);
-                // sendback same message for test
-                //if (networkGameMessage.datamembers[0].user != "server"){
-                    // networkGameMessage.datamembers[0].user = "browserWebClient";
-                    console.log("to server: ");
-                    console.log(networkGameMessage);
-                    networkGameMessage.operationName = "parsemessagetest";
-                    sendmessage(networkGameMessage);
-                //}
-            });
 
+        function NetworkGameMessage(service, operation, data) {
+            this.serviceName = service;
+            this.operationName = operation;
+            this.datamembers = data;
         }
+
+        function ChatMessage(usr, msg) {
+            this.timestamp = new Date().toISOString();
+            this.user = usr;
+            this.message = msg;
+        }
+
+        function connect() {
+            // <label>https<input id="https" type="checkbox"></label>
+            // <input id="ipadress" type="text" placeholder="ipadress">
+            // <input id="username" type="text" placeholder="username">
+            let https = document.getElementById("https").checked;
+            let ipadress = document.getElementById("ipadress").value;
+            let username = document.getElementById("username").value;
+
+            // todo :: how to wss (https), ws probably only works because local.
+            if (https) {
+                websocket = new WebSocket("wss://" + ipadress);
+            }
+            else {
+                websocket = new WebSocket("ws://" + ipadress);
+            }
+
+            websocket.onopen = function (e) {
+                console.log("connected to " + ipadress);
+                let gameMessage = new NetworkGameMessage("chat", "join", [JSON.stringify(username)]);
+                let jsonGameMessage = JSON.stringify(gameMessage);
+                websocket.send(utf8encoder.encode(jsonGameMessage));
+            }
+
+            websocket.onmessage = function (event) {
+                let blob = event.data;
+                var networkGameMessage;
+                blob.text().then(text => {
+                    var parsingServerMessage = JSON.parse(text);
+                    // if (parsingServerMessage.datamembers) {
+                    //     var arr = [];
+                    //     parsingServerMessage.datamembers.forEach(m =>
+                    //         arr.push(JSON.parse(m)) 
+                    //     );
+                    //     parsingServerMessage.datamembers = arr; // we have to go deeper xd
+                    // }
+                    networkGameMessage = parsingServerMessage;
+                    msgFromServer = networkGameMessage;
+                    let chatMessage = JSON.parse(networkGameMessage.datamembers[0]);
+                    let chatbox = document.getElementById("chatbox");
+                    let date = new Date(chatMessage.timestamp);
+                    chatbox.value += `[${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}]<${chatMessage.user}>: ${chatMessage.message}\n`;
+                });
+            }
+        }
+
+     
         var msgFromServer;
 
-        function sendmessage(obj) {
+        function sendGameMessage(obj) {
+            if (!websocket) {
+                alert("no websocket connection :'(");
+            }
             let jsonstring = JSON.stringify(obj);
-            console.log("to server json: ");
-            console.log(jsonstring);
-            console.log("to server json utf8byte: ");
-            console.log(utf8encoder.encode(jsonstring));
-
-            // debug bytes
-            // var str = "";
-            // utf8encoder.encode(jsonstring).forEach(b =>
-            // {
-            //     str = str + b + " ";
-            // });
-            // console.log(str);
-            exampleSocket.send(utf8encoder.encode(jsonstring));
+            websocket.send(utf8encoder.encode(jsonstring));
         }
+
+        function userchatmessage() {
+            let user = document.getElementById("username").value;
+            let text = document.getElementById("usermessage").value;
+            let chatMessage = JSON.stringify(new ChatMessage(user, text));
+            let networkGameMessage = new NetworkGameMessage("chat", "message", [chatMessage]);
+            sendGameMessage(networkGameMessage);
+        }
+
+        // debug bytes
+        // var str = "";
+        // utf8encoder.encode(jsonstring).forEach(b =>
+        // {
+        //     str = str + b + " ";
+        // });
+        // console.log(str);
     </script>
 </head>
 <body>
-    
+    <div>
+        <label>https:<input id="https" type="checkbox"></label>
+        <label>ipadress:<input id="ipadress" type="text" placeholder="ipadress" value="127.0.0.1"></label>
+        <label>username:<input id="username" type="text" placeholder="username" value="webclient"></label>
+        <button onclick="connect()">connect</button>
+    </div>
+    <div>
+        <textarea id="usermessage" rows="5" cols="50" style="display: block;"></textarea>
+        <button onclick="userchatmessage()">send message</button>
+    </div>
+    <div>
+        <textarea id="chatbox" rows="20" cols="65" readonly></textarea>
+    </div>
 </body>
 </html>
