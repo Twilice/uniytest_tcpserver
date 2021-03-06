@@ -32,7 +32,7 @@ namespace Assets.Scripts.ServerService
         [System.Runtime.InteropServices.DllImport("__Internal")]
         private static extern void SendMessageToBrowser(string message);
 #else
-        private static void SendMessageToBrowser(string msg){;}
+        private static void SendMessageToBrowser(string _){;}
 #endif
 
         // global helper functions

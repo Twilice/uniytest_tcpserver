@@ -64,9 +64,13 @@ namespace unitytest_tcpserver_webglclient
         private static extern void ConnectWebglToServer(int https, string ipadress, string username);
         [DllImport("__Internal")]
         private static extern void RegisterCallBackToWebgl(string gameobjectName, string onConnectUnityCallback, string onRecieveNetworkMessageCallback);
-        //private static extern void ConnectWebglToServer();
+#else
+        private static void SendMessageToBrowser(string _) {;}
+        private static void SendNetworkMessageToServer(string _) {;}
+        private static void ConnectWebglToServer(int _, string _2, string _3) {;}
+        private static void RegisterCallBackToWebgl(string _, string _2, string _3) {;}
 #endif
-      
+
         public WebglGameClient()
         {
             instance = this;
