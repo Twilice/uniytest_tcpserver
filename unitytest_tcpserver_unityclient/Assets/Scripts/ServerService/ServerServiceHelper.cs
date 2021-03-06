@@ -15,10 +15,13 @@ namespace Assets.Scripts.ServerService
         public List<Task<Action>> taskList = new List<Task<Action>>();
         public static ServerServiceHelper instance;
         private INetworkGameClient client;
+        private bool initialized = false;
 
         void Update()
         {
-            HandleIncomingMessages();
+            if (!initialized) return;
+
+            //HandleIncomingMessages();
 
             if (taskList.Count == 0) return;
 
@@ -31,6 +34,7 @@ namespace Assets.Scripts.ServerService
                 {
                     completedTasks.Add(task);
                     task.Result?.Invoke();
+                    SendMessageToBrowser("some task was completed");
                 }
             }
 
@@ -44,6 +48,8 @@ namespace Assets.Scripts.ServerService
 #if UNITY_WEBGL // && !UNITY_EDITOR
         [System.Runtime.InteropServices.DllImport("__Internal")]
         private static extern void SendMessageToBrowser(string message);
+#else
+        private static void SendMessageToBrowser(string msg){;}
 #endif
 
         // global helper functions
@@ -70,6 +76,7 @@ namespace Assets.Scripts.ServerService
             {
                 SendMessageToBrowser("create client dynamic with new T()");
                 instance.client = new T(); // bug? :: is this causing the webgl issues?
+                // I'm stupid... the webgl instance is a monobehvaiour...
             }
 
             return instance.client;
@@ -81,6 +88,7 @@ namespace Assets.Scripts.ServerService
 
             if (instance != null && instance.client != null)
             {
+                instance.initialized = true;
                 instance.client.InitGameClient(IPAddress.Parse(ipAdress), port, name);
             }
             else
@@ -116,7 +124,9 @@ namespace Assets.Scripts.ServerService
             instance.taskList.Add(task);
         }
 
-        public static Action<Exception> errorCallBack = (e) => { Debug.LogError("Error happened while requesting to server :\n\n" + e); };
+        public static Action<Exception> errorCallBack = (e) => { Debug.LogError("Error happened while requesting to server :\n\n" + e);
+            SendMessageToBrowser(e.Message + e.InnerException?.Message + e.StackTrace + e.InnerException?.StackTrace);
+        };
 
         public static void ListenOnGameService()
         {

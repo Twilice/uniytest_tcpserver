@@ -1,21 +1,11 @@
  --- current ---
 
-  actually test the code unity/javascript/server code...
-		- compile stuff fixed
+ * threads are not running at all on webgl even if built with "support".
+	- rebuild interface to not have any thread, move all threading to tcpClient.
 
-   - remove code until no longer null and/or out of memory
-   - figure out of it's unity or browser javascript that is causing out of memory.
+   * add connect button from unity instead of autoconnect on start
 
-
- * json communication finally established between server + javascript client.
-  - needs mayor refactor + cleaning
-  - test send chatmessage via html <input>
-  - map unity with javascript and pray we won't have as much json parse issues again.
-
- * look into possibility to include support for webgl (websocket)
-https://developer.mozilla.org/en-US/docs/Web/API/WebSockets_API/Writing_WebSocket_server
-
- * host somewhere to test real life case
+  * host somewhere to test real life case
   - also include test from android .apk
   - also test if ws (http) work outside of localhost, and then check if we can get https working. Or if that is more of a server IT issue rather than coding issue.
 

@@ -54,12 +54,22 @@ public class GameCoordinator : MonoBehaviour
             throw new NullReferenceException($"{nameof(GameCoordinator)} {transform.name} - scriptableObject type {nameof(GameData)} with name {gameDataName} is missing.");
         gameData = Instantiate(gameData); // don't change the asset object.
 
+        initialized = true;
+
+#if UNITY_WEBGL && !UNITY_EDITOR
+        WebGLStartGame(); // not actually needed, just tells browser to start the custom html loading bar at 0.
+#endif
+    }
+
+    public void Start()
+    {
 #if UNITY_WEBGL && !UNITY_EDITOR
         _ = ServerServiceHelper.CreateClient<WebglGameClient>();
 #else
         _ = ServerServiceHelper.CreateClient<TcpGameClient>();
 #endif
 
+        lazyScriptHandler = FindObjectOfType<LazyScriptHandler>();
         ServerServiceHelper.RegisterChatCallBacks(RecieveChatMessage, UserJoinedMessage);
 
         // todo :: should do a button to connect (+ reconnect?)
@@ -67,13 +77,6 @@ public class GameCoordinator : MonoBehaviour
         ServerServiceHelper.InitializeClient<WebglGameClient>(gameData.ipAdress, -2, gameData.userName);
 #else
         ServerServiceHelper.InitializeClient<TcpGameClient>(gameData.ipAdress, gameData.port, gameData.userName);
-#endif
-
-        lazyScriptHandler = FindObjectOfType<LazyScriptHandler>();
-        initialized = true;
-
-#if UNITY_WEBGL && !UNITY_EDITOR
-        WebGLStartGame(); // not actually needed, just tells browser to start the custom html loading bar at 0.
 #endif
     }
 

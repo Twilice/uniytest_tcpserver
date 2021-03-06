@@ -267,85 +267,91 @@ namespace unitytest_tcpserver_host
 
             Parallel.ForEach(tcpClients, client =>
             {
-                TcpClient tcpClient = client.Value;
-                if (tcpClient.Connected == false)
-                {
-                    // can we remove while iterating? .values should be a copy of the values and we remove keys so should be fine.
-                    var clientEndpoint = client.Key;
-
-                    tcpClients.TryRemove(clientEndpoint, out _); // - this should point to tcpClient
-                    //disposeClient.Dispose(); // bug :: howto dispose everything correctly? I get errors when I try to "gracefully" dispose...
-
-                    return;
-                }
-
-                try
-                {
-                    var stream = tcpClient.GetStream();
-                    var networkMessage = new NetworkGameMessage() { serviceName = "chat", operationName = "message", datamembers = new List<string> { message.AsJsonString } };
-
-                    // debug bytes
-                    //Console.WriteLine(networkMessage.AsJsonString);
-                    //var bytes = networkMessage.AsJsonBytes;
-                    //foreach (var b in bytes)
-                    //    Console.Write(b + " ");
-                    //Console.WriteLine();
-                    //Console.WriteLine();
-
-                    stream.Write(networkMessage.AsJsonBytes);
-                }
-                catch (JsonException e)
-                {
-                    // todo :: dispose of client? What to do with incorrect json... Many environments will likely cause issue.
-                    Console.WriteLine(e.Message + e.InnerException?.Message);
-                }
-                catch (IOException e)
-                {
-                    // todo :: dispose of client? Or is error because client already is disposed?
-                    Console.WriteLine(e.Message + e.InnerException?.Message);
-                }
+                SendChatMessageTcpClient(message, client);
 
             });
 
             Parallel.ForEach(webClients, client =>
             {
-                /* error :: error can occur crashing server, example sometimes when browser reconnect or timeout?
-                exception ---> System.Net.HttpListenerException (1229): An operation was attempted on a nonexistent network connection.
-                            at System.Net.WebSockets.WebSocketHttpListenerDuplexStream.WriteAsyncFast(HttpListenerAsyncEventArgs eventArgs) */
-                WebSocket webClient = client.Value;
-                if (webClient.State != WebSocketState.Open)
-                {
-                    // can we remove while iterating? .values should be a copy of the values and we remove keys so should be fine.
-                    var clientUri = client.Key;
-
-                    webClients.TryRemove(clientUri, out _); // - this should point to tcpClient
-                    //disposeClient.Dispose(); // bug :: howto dispose everything correctly? I get errors when I try to "gracefully" dispose...
-
-                    return;
-                }
-
-                try
-                {
-                    var networkMessage = new NetworkGameMessage() { serviceName = "chat", operationName = "message", datamembers = new List<string> { message.AsJsonString } };
-
-                    webClient.SendAsync(networkMessage.AsJsonBytes, WebSocketMessageType.Binary, true, CancellationToken.None).Wait();
-                }
-                catch (JsonException e)
-                {
-                    // todo :: dispose of client? What to do with incorrect json... Many environments will likely cause issue.
-                    Console.WriteLine(e.Message + e.InnerException?.Message);
-                }
-                catch (IOException e)
-                {
-                    // todo :: dispose of client? Or is error because client already is disposed?
-                    Console.WriteLine(e.Message + e.InnerException?.Message);
-                }
+                SendChatMessageWebsocket(message, client);
             });
         }
 
-        public void SendMessage()
+        public void SendChatMessageTcpClient(ChatMessage message, KeyValuePair<IPEndPoint, TcpClient> client)
         {
+            TcpClient tcpClient = client.Value;
+            if (tcpClient.Connected == false)
+            {
+                // can we remove while iterating? .values should be a copy of the values and we remove keys so should be fine.
+                var clientEndpoint = client.Key;
 
+                tcpClients.TryRemove(clientEndpoint, out _); // - this should point to tcpClient
+                                                             //disposeClient.Dispose(); // bug :: howto dispose everything correctly? I get errors when I try to "gracefully" dispose...
+
+                return;
+            }
+
+            try
+            {
+                var stream = tcpClient.GetStream();
+                var networkMessage = new NetworkGameMessage() { serviceName = "chat", operationName = "message", datamembers = new List<string> { message.AsJsonString } };
+
+                // debug bytes
+                //Console.WriteLine(networkMessage.AsJsonString);
+                //var bytes = networkMessage.AsJsonBytes;
+                //foreach (var b in bytes)
+                //    Console.Write(b + " ");
+                //Console.WriteLine();
+                //Console.WriteLine();
+
+                stream.Write(networkMessage.AsJsonBytes);
+            }
+            catch (JsonException e)
+            {
+                // todo :: dispose of client? What to do with incorrect json... Many environments will likely cause issue.
+                Console.WriteLine(e.Message + e.InnerException?.Message);
+            }
+            catch (IOException e)
+            {
+                // todo :: dispose of client? Or is error because client already is disposed?
+                Console.WriteLine(e.Message + e.InnerException?.Message);
+            }
+        }
+
+
+        public void SendChatMessageWebsocket(ChatMessage message, KeyValuePair<IPEndPoint, WebSocket> client)
+        {
+            /* error :: error can occur crashing server, example sometimes when browser reconnect or timeout?
+           exception ---> System.Net.HttpListenerException (1229): An operation was attempted on a nonexistent network connection.
+                       at System.Net.WebSockets.WebSocketHttpListenerDuplexStream.WriteAsyncFast(HttpListenerAsyncEventArgs eventArgs) */
+            WebSocket webClient = client.Value;
+            if (webClient.State != WebSocketState.Open)
+            {
+                // can we remove while iterating? .values should be a copy of the values and we remove keys so should be fine.
+                var clientUri = client.Key;
+
+                webClients.TryRemove(clientUri, out _); // - this should point to tcpClient
+                                                        //disposeClient.Dispose(); // bug :: howto dispose everything correctly? I get errors when I try to "gracefully" dispose...
+
+                return;
+            }
+
+            try
+            {
+                var networkMessage = new NetworkGameMessage() { serviceName = "chat", operationName = "message", datamembers = new List<string> { message.AsJsonString } };
+
+                webClient.SendAsync(networkMessage.AsJsonBytes, WebSocketMessageType.Binary, true, CancellationToken.None).Wait();
+            }
+            catch (JsonException e)
+            {
+                // todo :: dispose of client? What to do with incorrect json... Many environments will likely cause issue.
+                Console.WriteLine(e.Message + e.InnerException?.Message);
+            }
+            catch (IOException e)
+            {
+                // todo :: dispose of client? Or is error because client already is disposed?
+                Console.WriteLine(e.Message + e.InnerException?.Message);
+            }
         }
 
         public class ChatMessage
