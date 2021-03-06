@@ -12,7 +12,7 @@ public class LazyScriptHandler : MonoBehaviour
 
     public void SendChatMessage(string message)
     {
-        ServerServiceHelper.SendChatMessage(message, null, null);
+        ServerServiceHelper.SendChatMessage(message);
     }
 
     public void RecieveChatMessage(string message)

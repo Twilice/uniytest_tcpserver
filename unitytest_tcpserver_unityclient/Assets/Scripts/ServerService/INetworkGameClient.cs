@@ -1,5 +1,4 @@
 ﻿using System;
-using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Net;
 using System.Text;
@@ -14,7 +13,7 @@ namespace Assets.Scripts.ServerService
 
         void SendChatMessage(string message);
 
-        ConcurrentQueue<NetworkGameMessage> ServerMessageQueue { get; }
+        List<NetworkGameMessage> GetUnproccesdNetworkMessages(int maxMessagesToProcess = -1);
     }
 
     [Serializable]

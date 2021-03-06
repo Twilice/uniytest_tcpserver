@@ -1,8 +1,5 @@
 ﻿using System;
-using System.Collections.Concurrent;
-using System.Collections.Generic;
 using System.Net;
-using System.Threading.Tasks;
 
 using Newtonsoft.Json;
 
@@ -12,7 +9,6 @@ namespace Assets.Scripts.ServerService
 {
     public class ServerServiceHelper : MonoBehaviour
     {
-        public List<Task<Action>> taskList = new List<Task<Action>>();
         public static ServerServiceHelper instance;
         private INetworkGameClient client;
         private bool initialized = false;
@@ -21,31 +17,18 @@ namespace Assets.Scripts.ServerService
         {
             if (!initialized) return;
 
-            //HandleIncomingMessages();
-
-            if (taskList.Count == 0) return;
-
-            List<Task<Action>> completedTasks = new List<Task<Action>>();
-
-            // note :: we don't want to lock the Unity main thread, so we let main thread handle the resulting callback.
-            foreach (var task in taskList)
-            {
-                if (task.IsCompleted)
-                {
-                    completedTasks.Add(task);
-                    task.Result?.Invoke();
-                    SendMessageToBrowser("some task was completed");
-                }
-            }
-
-            foreach (var completedTask in completedTasks)
-            {
-                taskList.Remove(completedTask);
-            }
+            HandleIncomingMessages();
         }
 
-        // temp :: for webgl test to figure out null only
-#if UNITY_WEBGL // && !UNITY_EDITOR
+        public static void ErrorDebugMessage(Exception e, string additionalInfo = "")
+        {
+            Debug.LogError($"{additionalInfo}\n{e.Message}\n{e.InnerException?.Message}\n{e.StackTrace}\n{e.InnerException?.StackTrace}");
+            SendMessageToBrowser($"{additionalInfo}\n{e.Message}\n{e.InnerException?.Message}\n{e.StackTrace}\n{e.InnerException?.StackTrace}");
+        }
+
+
+        // temp :: for webgl test to figure out bugs
+#if UNITY_WEBGL  && !UNITY_EDITOR
         [System.Runtime.InteropServices.DllImport("__Internal")]
         private static extern void SendMessageToBrowser(string message);
 #else
@@ -60,7 +43,6 @@ namespace Assets.Scripts.ServerService
         /// <param name="alreadyInstancedClient">If client is already created by something else.</param>
         /// <returns></returns>
         public static INetworkGameClient CreateClient<T>(T alreadyInstancedClient = null) where T : class, INetworkGameClient, new()
-        //public static void InitService(string ipAdress, int port, string name)
         {
             if (instance == null)
             {
@@ -74,9 +56,7 @@ namespace Assets.Scripts.ServerService
             }
             else
             {
-                SendMessageToBrowser("create client dynamic with new T()");
-                instance.client = new T(); // bug? :: is this causing the webgl issues?
-                // I'm stupid... the webgl instance is a monobehvaiour...
+                instance.client = new T();
             }
 
             return instance.client;
@@ -93,41 +73,23 @@ namespace Assets.Scripts.ServerService
             }
             else
             {
-                Debug.LogError("ServerServiceHelper or NetworkClient is not initialized, but tried to listen on ChatService");
+                Debug.LogError("ServerServiceHelper or NetworkClient is not created, but tried to connect client to server");
             }
         }
 
-        // todo :: we can't force onFail into Task result if exception? We don't want to just run the onFail outside mainthread. Designwise maybe all messages must be "fire and forget" style. Then server sends the request and it's processed there.
-        public static void SendChatMessage(string message, Action onComplete, Action onFail)
+        public static void SendChatMessage(string message)
         {
-            SendMessageToBrowser("helper send chatmessage");
-
-            Task<Action> task = Task.Run(() =>
+            try
             {
-                try
-                {
-                    instance.client.SendChatMessage(message);
-                    return onComplete;
-                }
-                finally
-                {
-                    try
-                    {
-
-                    }
-                    catch (Exception e)
-                    {
-                        errorCallBack(e);
-                    }
-                }
-            });
-            instance.taskList.Add(task);
+                SendMessageToBrowser("helper send chatmessage");
+                instance.client.SendChatMessage(message);
+            }
+            catch (Exception e)
+            {
+                ErrorDebugMessage(e);
+            }
         }
-
-        public static Action<Exception> errorCallBack = (e) => { Debug.LogError("Error happened while requesting to server :\n\n" + e);
-            SendMessageToBrowser(e.Message + e.InnerException?.Message + e.StackTrace + e.InnerException?.StackTrace);
-        };
-
+    
         public static void ListenOnGameService()
         {
 
@@ -156,19 +118,16 @@ namespace Assets.Scripts.ServerService
         private void HandleIncomingMessages()
         {
             SendMessageToBrowser("handle incoming messages");
-
-            ConcurrentQueue<NetworkGameMessage> mq = client.ServerMessageQueue;
-            while (mq.Count != 0) // error :: I'm finding some sources saying concurrentbag.count doesn't work in webgl. Maybe it's cause of out of memory?
+            var messages = client.GetUnproccesdNetworkMessages();
+            foreach(var msg in messages)
             {
-                mq.TryDequeue(out var serverMessage);
-
-                switch (serverMessage.serviceName)
+                switch (msg.serviceName)
                 {
                     case "game":
-                        GameService(serverMessage);
+                        GameService(msg);
                         break;
                     case "chat":
-                        ChatService(serverMessage);
+                        ChatService(msg);
                         break;
                     default:
                         break;
@@ -186,57 +145,39 @@ namespace Assets.Scripts.ServerService
         {
             if (serverMessage.operationName == "message")
             {
-                Task<Action> task = Task.Run(() =>
+                try 
+                { 
+                    ChatMessage message = JsonConvert.DeserializeObject<ChatMessage>(serverMessage.datamembers[0]);
+                    messageCallback(message);
+                }
+                catch (JsonException e)
                 {
-                    try
-                    {
-                        ChatMessage message = JsonConvert.DeserializeObject<ChatMessage>(serverMessage.datamembers[0]);
-                        return (Action)(() => { messageCallback(message); });
-                    }
-                    finally
-                    {
-                        try
-                        {
-
-                        }
-                        catch (JsonException e)
-                        {
-                            Debug.LogError("Error happened while processing json - service chat - operation join:\n\n" + e + e.InnerException?.Message);
-                        }
-                        catch (Exception e)
-                        {
-                            Debug.LogError("Unknown Error happened while calling service chat - operation message:\n\n" + e + e.InnerException?.Message);
-                        }
-                    }
-                });
-                instance.taskList.Add(task);
+                    ErrorDebugMessage(e, "Error happened while processing json - service chat - operation join:\n");
+                }
+                catch (Exception e)
+                {
+                    ErrorDebugMessage(e, "Unknown Error happened while calling service chat - operation message:\n");
+                }
             }
             else if (serverMessage.operationName == "join")
             {
-                Task<Action> task = Task.Run(() =>
+                try
                 {
-                    try
-                    {
-                        ChatMessage message = JsonConvert.DeserializeObject<ChatMessage>(serverMessage.datamembers[0]);
-                        return (Action)(() => { userjoinCallback(message); });
-                    }
-                    finally
-                    {
-                        try
-                        {
-
-                        }
-                        catch (JsonException e)
-                        {
-                            Debug.LogError("Error happened while processing json - service chat - operation join:\n\n" + e + e.InnerException?.Message);
-                        }
-                        catch (Exception e)
-                        {
-                            Debug.LogError("Unknown Error happened while calling service chat - operation join:\n\n" + e + e.InnerException?.Message);
-                        }
-                    }
-                });
-                instance.taskList.Add(task);
+                    ChatMessage message = JsonConvert.DeserializeObject<ChatMessage>(serverMessage.datamembers[0]);
+                    userjoinCallback(message);
+                }
+                catch (JsonException e)
+                {
+                    ErrorDebugMessage(e, "Error happened while processing json - service chat - operation join:\n");
+                }
+                catch (Exception e)
+                {
+                    ErrorDebugMessage(e, "Unknown Error happened while calling service chat - operation message:\n");
+                }
+            }
+            else
+            {
+                // todo : unknown operation, just skip could be spam
             }
         }
     }

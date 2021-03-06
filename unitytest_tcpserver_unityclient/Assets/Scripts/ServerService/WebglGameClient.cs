@@ -1,5 +1,4 @@
 ﻿using System;
-using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Net;
 
@@ -18,9 +17,9 @@ namespace unitytest_tcpserver_webglclient
 
     public class WebglGameClient : INetworkGameClient
     {
-        internal class WebglGameClientListenOnWebgl : MonoBehaviour
+        internal class WebglGameClientListenServer : MonoBehaviour
         {
-            private static WebglGameClientListenOnWebgl inst;
+            private static WebglGameClientListenServer inst;
             public WebglGameClient networkClientRef;
 
             public void Awake()
@@ -50,7 +49,7 @@ namespace unitytest_tcpserver_webglclient
         }
 
         public static WebglGameClient instance;
-        internal static WebglGameClientListenOnWebgl listenInstance; 
+        internal static WebglGameClientListenServer listenInstance; 
         public string userName = "unityWebglClient";
         public IPAddress ipAdress;
         public int port;
@@ -71,10 +70,10 @@ namespace unitytest_tcpserver_webglclient
         public WebglGameClient()
         {
             instance = this;
-            listenInstance = new GameObject("webglgameclient").AddComponent<WebglGameClientListenOnWebgl>();
+            listenInstance = new GameObject("webglgameclient").AddComponent<WebglGameClientListenServer>();
         }
 
-        public ConcurrentQueue<NetworkGameMessage> ServerMessageQueue { get; private set; }
+        public Queue<NetworkGameMessage> networkMessageQueue;
 
         /// <summary>
         /// If port is -1 = https
@@ -84,7 +83,7 @@ namespace unitytest_tcpserver_webglclient
         /// <param name="userName"></param>
         public void InitGameClient(IPAddress ipAdress, int port, string userName = null)
         {
-            ServerMessageQueue = new ConcurrentQueue<NetworkGameMessage>();
+            networkMessageQueue = new Queue<NetworkGameMessage>();
 
             SendMessageToBrowser("init");
             if (userName != null)
@@ -152,7 +151,7 @@ namespace unitytest_tcpserver_webglclient
                 //byte[] jsonBuffer = new byte[readBufferSize];
                 NetworkGameMessage networkMessage = JsonConvert.DeserializeObject<NetworkGameMessage>(jsonString);
 
-                ServerMessageQueue.Enqueue(networkMessage);
+                networkMessageQueue.Enqueue(networkMessage);
             }
             catch (JsonException e)
             {
@@ -180,6 +179,26 @@ namespace unitytest_tcpserver_webglclient
             };
 
             SendNetworkMessageToServer(networkMessage.AsJsonString);
+        }
+
+        public List<NetworkGameMessage> GetUnproccesdNetworkMessages(int maxMessagesToProcess = -1)
+        {
+            List<NetworkGameMessage> messagesToProcess = new List<NetworkGameMessage>();
+            if (maxMessagesToProcess == -1)
+            {
+                while (0 < networkMessageQueue.Count)
+                {
+                    messagesToProcess.Add(networkMessageQueue.Dequeue());
+                }
+            }
+            else
+            {
+                while (messagesToProcess.Count < maxMessagesToProcess && 0 < networkMessageQueue.Count)
+                {
+                    messagesToProcess.Add(networkMessageQueue.Dequeue());
+                }
+            }
+            return messagesToProcess;
         }
     }
 }

@@ -24,8 +24,9 @@ namespace unitytest_tcpserver_tcpclient
         public int serverPort;
         public int clientPort = 0;
         public string userName = "unityTcpClient";
-        public ConcurrentQueue<NetworkGameMessage> ServerMessageQueue { get; private set; }
+        public ConcurrentQueue<NetworkGameMessage> networkMessageQueue;
 
+        
 
         public TcpGameClient() {; }
 
@@ -36,7 +37,7 @@ namespace unitytest_tcpserver_tcpclient
                 this.userName = userName;
             serverPort = port;
 
-            ServerMessageQueue = new ConcurrentQueue<NetworkGameMessage>();
+            networkMessageQueue = new ConcurrentQueue<NetworkGameMessage>();
 
             tcpClient = new TcpClient(new IPEndPoint(ipAdress, clientPort));
             tcpClient.Connect(new IPEndPoint(ipAdress, serverPort));
@@ -87,7 +88,7 @@ namespace unitytest_tcpserver_tcpclient
                 stream.Read(jsonBuffer, 0, jsonBuffer.Length);
                 var gameMessage = JsonConvertUTF8Bytes.DeserializeObject<NetworkGameMessage>(jsonBuffer); 
 
-                ServerMessageQueue.Enqueue(gameMessage);
+                networkMessageQueue.Enqueue(gameMessage);
 
                 //ThreadPool.QueueUserWorkItem(ReadIncomingStream, stream, true);
                 ThreadPool.QueueUserWorkItem(new WaitCallback(ReadIncomingStream<NetworkStream>), stream);
@@ -147,5 +148,81 @@ namespace unitytest_tcpserver_tcpclient
                 Debug.Log(e.Message + e.InnerException?.Message);
             }
         }
+
+        public List<NetworkGameMessage> GetUnproccesdNetworkMessages(int maxMessagesToProcess = -1)
+        {
+            List<NetworkGameMessage> messagesToProcess = new List<NetworkGameMessage>();
+            if(maxMessagesToProcess == -1)
+            {
+                while (networkMessageQueue.TryDequeue(out var networkMessage))
+                {
+                    messagesToProcess.Add(networkMessage);
+                }
+            }
+            else
+            {
+                while (messagesToProcess.Count < maxMessagesToProcess && networkMessageQueue.TryDequeue(out var networkMessage))
+                {
+                    messagesToProcess.Add(networkMessage);
+                }
+            }
+            return messagesToProcess;
+        }
     }
 }
+
+
+/* note :: don't actually need following code since we only have "fire and forget" operations, but can be good to keep a shell if we want to implement procedure calls with return values where it's only complete after getting servre message.
+
+
+    public List<Task<Action>> taskList = new List<Task<Action>>();
+
+    void Update() {
+        if (taskList.Count == 0) return;
+
+        List<Task<Action>> completedTasks = new List<Task<Action>>();
+
+        // note :: we don't want to lock the Unity main thread, so we let main thread handle the resulting callback.
+        foreach (var task in taskList)
+        {
+            if (task.IsCompleted)
+            {
+                completedTasks.Add(task);
+                task.Result?.Invoke();
+                SendMessageToBrowser("some task was completed");
+            }
+        }
+
+        foreach (var completedTask in completedTasks)
+        {
+            taskList.Remove(completedTask);
+        }
+    }
+
+    void SomeFunc(string message, Action<T> onComplete)
+    {
+     Task<Action> task = Task.Run(() =>
+        {
+            try
+            {
+                instance.client.SomeFunc(message);
+                return onComplete;
+                // or 
+                return (Action)(() => { onComplete(some_variable); });
+            }
+            finally
+            {
+                try
+                {
+
+                }
+                catch (Exception e)
+                {
+                    errorCallBack(e);
+                }
+            }
+        });
+        instance.taskList.Add(task);
+    }
+
+*/
