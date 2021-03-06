@@ -10,6 +10,7 @@ using Newtonsoft.Json;
 using System.IO;
 using UnityEngine;
 using Assets.Scripts.ServerService;
+using System.Threading.Tasks;
 
 namespace unitytest_tcpserver_tcpclient
 {
@@ -20,7 +21,7 @@ namespace unitytest_tcpserver_tcpclient
         public TcpClient tcpClient = null;
         public TcpListener tcpListener = null;
         public const int readBufferSize = 8192;
-        public IPAddress ipAdress;
+        public string ipAdress;
         public int serverPort;
         public int clientPort = 0;
         public string userName = "unityTcpClient";
@@ -30,44 +31,50 @@ namespace unitytest_tcpserver_tcpclient
 
         public TcpGameClient() {; }
 
-        public void InitGameClient(IPAddress ipAdress, int port, string userName = null)
+        public void InitGameClient(string ipAdress, int port, string userName = null)
         {
-            this.ipAdress = ipAdress;
-            if (userName != null)
-                this.userName = userName;
-            serverPort = port;
-
-            networkMessageQueue = new ConcurrentQueue<NetworkGameMessage>();
-
-            tcpClient = new TcpClient(new IPEndPoint(ipAdress, clientPort));
-            tcpClient.Connect(new IPEndPoint(ipAdress, serverPort));
-
-            // todo :: handle failures to connect
-
-            IPEndPoint serverEndPoint = tcpClient.Client.RemoteEndPoint as IPEndPoint;
-            clientPort = ((IPEndPoint)tcpClient.Client.LocalEndPoint).Port;
-            Debug.Log($"Connected to server {serverEndPoint.Address}:{serverEndPoint.Port}");
-            
-            var stream = tcpClient.GetStream();
-
-            try
+            Task.Run(() =>
             {
-                var gameMessage = new NetworkGameMessage()
+                this.ipAdress = ipAdress;
+                if (userName != null)
+                    this.userName = userName;
+                serverPort = port;
+
+                networkMessageQueue = new ConcurrentQueue<NetworkGameMessage>();
+
+                //tcpClient = new TcpClient(new IPEndPoint(ipAdress, clientPort));
+                tcpClient = new TcpClient(ipAdress, serverPort);
+                //tcpClient.Connect(ipAdress, serverPort);
+
+                // todo :: handle failures to connect
+
+                IPEndPoint serverEndPoint = tcpClient.Client.RemoteEndPoint as IPEndPoint;
+                clientPort = ((IPEndPoint)tcpClient.Client.LocalEndPoint).Port;
+                Debug.Log($"Connected to server {serverEndPoint.Address}:{serverEndPoint.Port}");
+
+                var stream = tcpClient.GetStream();
+
+                try
                 {
-                    serviceName = "default",
-                    operationName = "join",
-                    datamembers = new List<string> { JsonConvert.SerializeObject(userName) }
-                };
+                    var gameMessage = new NetworkGameMessage()
+                    {
+                        serviceName = "default",
+                        operationName = "join",
+                        datamembers = new List<string> { JsonConvert.SerializeObject(userName) }
+                    };
 
-                var bytes = gameMessage.AsJsonBytes;
-                stream.Write(bytes, 0, bytes.Length);
-            }
-            catch (IOException e)
-            {
-                Debug.Log(e.Message + e.InnerException?.Message);
-            }
+                    var bytes = gameMessage.AsJsonBytes;
+                    stream.Write(bytes, 0, bytes.Length);
+                }
+                catch (IOException e)
+                {
+                    Debug.Log(e.Message + e.InnerException?.Message);
+                }
 
-            ThreadPool.QueueUserWorkItem(new WaitCallback(ReadIncomingStream<NetworkStream>), stream);
+                ThreadPool.QueueUserWorkItem(new WaitCallback(ReadIncomingStream<NetworkStream>), stream);
+
+                ServerServiceHelper.instance.initialized = true;
+            });
         }
 
         public void Disconnect()

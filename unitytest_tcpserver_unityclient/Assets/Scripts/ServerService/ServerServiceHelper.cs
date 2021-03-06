@@ -11,7 +11,7 @@ namespace Assets.Scripts.ServerService
     {
         public static ServerServiceHelper instance;
         private INetworkGameClient client;
-        private bool initialized = false;
+        public bool initialized = false;
 
         void Update()
         {
@@ -68,8 +68,7 @@ namespace Assets.Scripts.ServerService
 
             if (instance != null && instance.client != null)
             {
-                instance.initialized = true;
-                instance.client.InitGameClient(IPAddress.Parse(ipAdress), port, name);
+                instance.client.InitGameClient(ipAdress, port, name);
             }
             else
             {

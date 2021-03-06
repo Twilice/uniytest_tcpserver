@@ -18,7 +18,6 @@ namespace unitytest_tcpserver_host
     class Program
     {
         const string ipAdress = "127.0.0.1";
-        const int port = 8000;
 
         static void Main(string[] args)
         {
@@ -27,7 +26,7 @@ namespace unitytest_tcpserver_host
             Console.WriteLine("Hello Server! Awaiting clients.");
 
             //var server = new TcpGameServer(IPAddress.Parse(ipAdress), port);
-            var server = new TcpGameServer(IPAddress.Any, port);
+            var server = new TcpGameServer(IPAddress.Any);
 
             server.InitTcpGameServer();
 
@@ -62,17 +61,18 @@ namespace unitytest_tcpserver_host
         public ConcurrentDictionary<IPEndPoint, WebSocket> webClients = null;
         public const int readBufferSize = 8192;
         public IPAddress ipAdress;
-        public int port;
+        const int socketPort = 443;
+        const int wssPort = 443;
+        const int wsPort = 80;
         public string serverName = "server";
 
         // maybes / not implemented yet state variables
         public bool listeningToClients = true;
 
         private TcpGameServer() {;}
-        public TcpGameServer(IPAddress ipAdress, int port)
+        public TcpGameServer(IPAddress ipAdress)
         {
             this.ipAdress = ipAdress;
-            this.port = port;
         }
 
         public void InitTcpGameServer()
@@ -114,7 +114,7 @@ namespace unitytest_tcpserver_host
 
         public void ListenIncomingClients()
         {
-            tcpListener = new TcpListener(ipAdress, port);
+            tcpListener = new TcpListener(ipAdress, socketPort);
             tcpListener.Start();
             Console.WriteLine("Server is listening");
 
@@ -147,13 +147,13 @@ namespace unitytest_tcpserver_host
 
             if (ipAdress == IPAddress.Any)
             {
-                httpListener.Prefixes.Add($"https://+:{port+1}/");
-                httpListener.Prefixes.Add($"http://+:{port+2}/");
+                //httpListener.Prefixes.Add($"https://+:{wssPort}/");
+                httpListener.Prefixes.Add($"http://+:{wsPort}/");
             }
             else
             {
-                httpListener.Prefixes.Add($"https://{ipAdress}:{port+1}/");
-                httpListener.Prefixes.Add($"http://{ipAdress}:{port+2}/");
+                //httpListener.Prefixes.Add($"https://{ipAdress}:{wssPort}/");
+                httpListener.Prefixes.Add($"http://{ipAdress}:{wsPort}/");
             }
             httpListener.Start();
 

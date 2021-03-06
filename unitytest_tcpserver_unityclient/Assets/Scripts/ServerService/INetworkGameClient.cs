@@ -9,7 +9,7 @@ namespace Assets.Scripts.ServerService
 {
     public interface INetworkGameClient
     {
-        void InitGameClient(IPAddress ipAdress, int port, string userName);
+        void InitGameClient(string ipAdress, int port, string userName);
 
         void SendChatMessage(string message);
 

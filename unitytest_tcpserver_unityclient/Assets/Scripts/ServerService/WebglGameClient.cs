@@ -51,7 +51,7 @@ namespace unitytest_tcpserver_webglclient
         public static WebglGameClient instance;
         internal static WebglGameClientListenServer listenInstance; 
         public string userName = "unityWebglClient";
-        public IPAddress ipAdress;
+        public string ipAdress;
         public int port;
         const int readBufferSize = 8192;
 
@@ -81,7 +81,7 @@ namespace unitytest_tcpserver_webglclient
         /// <param name="ipAdress">Ipadress to concat to wss://ipAdress or ws://ipAdress</param>
         /// <param name="port">If -1 use wss, else ws.</param>
         /// <param name="userName"></param>
-        public void InitGameClient(IPAddress ipAdress, int port, string userName = null)
+        public void InitGameClient(string ipAdress, int port, string userName = null)
         {
             networkMessageQueue = new Queue<NetworkGameMessage>();
 
@@ -111,7 +111,7 @@ namespace unitytest_tcpserver_webglclient
                 {
                     https = 1;
                 }
-                ConnectWebglToServer(https, ipAdress.ToString(), userName);
+                ConnectWebglToServer(https, ipAdress, userName);
                     //ConnectWebglToServer();
             }
             // temp :: debug
