@@ -1,19 +1,18 @@
 ﻿using System;
-using System.Collections.Generic;
-
 using Assets.Scripts.ServerService;
-
 using InvocationFlow;
 using UnityEngine;
 
-using unitytest_tcpserver_client;
-
-using Random = UnityEngine.Random;
+#if UNITY_WEBGL && !UNITY_EDITOR
+using unitytest_tcpserver_webglclient;
+#else
+using unitytest_tcpserver_tcpclient;
+#endif
 
 public class GameCoordinator : MonoBehaviour
 {
     // *** global construct *** 
-    #region construct
+#region construct
     public static GameCoordinator instance;
     public static bool initialized = false;
     [RuntimeInitializeOnLoadMethod]
@@ -28,14 +27,14 @@ public class GameCoordinator : MonoBehaviour
         }
         instance.Init();
     }
-    #endregion
+#endregion
 
     // *** variables *** 
-    #region variables
+#region variables
     public GameData gameData;
     public AudioSource audioSource;
     public LazyScriptHandler lazyScriptHandler;
-    #endregion
+#endregion
 
 #if UNITY_WEBGL // && !UNITY_EDITOR
     [System.Runtime.InteropServices.DllImport("__Internal")]
@@ -43,7 +42,7 @@ public class GameCoordinator : MonoBehaviour
 #endif
 
     // *** functions ***
-    #region functions
+#region functions
     public void Init()
     {
         DontDestroyOnLoad(this);
@@ -56,11 +55,19 @@ public class GameCoordinator : MonoBehaviour
         gameData = Instantiate(gameData); // don't change the asset object.
 
 #if UNITY_WEBGL && !UNITY_EDITOR
-        ServerServiceHelper.InitService<WebglGameClient>(gameData.ipAdress, gameData.port, gameData.userName);
+        _ = ServerServiceHelper.CreateClient<WebglGameClient>();
 #else
-        ServerServiceHelper.InitService<TcpGameClient>(gameData.ipAdress, gameData.port, gameData.userName);
+        _ = ServerServiceHelper.CreateClient<TcpGameClient>();
 #endif
-        ServerServiceHelper.ListenOnChatService(RecieveChatMessage, UserJoinedMessage);
+
+        ServerServiceHelper.RegisterChatCallBacks(RecieveChatMessage, UserJoinedMessage);
+
+        // todo :: should do a button to connect (+ reconnect?)
+#if UNITY_WEBGL && !UNITY_EDITOR
+        ServerServiceHelper.InitializeClient<WebglGameClient>(gameData.ipAdress, -2, gameData.userName);
+#else
+        ServerServiceHelper.InitializeClient<TcpGameClient>(gameData.ipAdress, gameData.port, gameData.userName);
+#endif
 
         lazyScriptHandler = FindObjectOfType<LazyScriptHandler>();
         initialized = true;

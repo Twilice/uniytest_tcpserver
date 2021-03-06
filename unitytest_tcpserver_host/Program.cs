@@ -151,7 +151,7 @@ namespace unitytest_tcpserver_host
             {
                 var listenContext = httpListener.GetContext();
                 IPEndPoint clientEndPoint = listenContext.Request.RemoteEndPoint;
-                var task = listenContext.AcceptWebSocketAsync(null, TimeSpan.FromSeconds(10));
+                var task = listenContext.AcceptWebSocketAsync(null, TimeSpan.FromSeconds(60));
                 var webSocketClient = task.Result.WebSocket; // result is blocking
                 Console.WriteLine($"Client connected from {clientEndPoint.Address}:{clientEndPoint.Port}");
                 webClients[clientEndPoint] = webSocketClient;

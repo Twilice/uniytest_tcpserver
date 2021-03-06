@@ -4,16 +4,14 @@ using System.Collections.Generic;
 using System.Net;
 using System.Net.Sockets;
 using System.Threading;
-using System.Threading.Tasks;
 //using System.Text.Json;
 //using System.Text.Json.Serialization;
 using Newtonsoft.Json;
-using System.Globalization;
 using System.IO;
 using UnityEngine;
 using Assets.Scripts.ServerService;
 
-namespace unitytest_tcpserver_client
+namespace unitytest_tcpserver_tcpclient
 {
     public class TcpGameClient : INetworkGameClient
     {
@@ -26,7 +24,7 @@ namespace unitytest_tcpserver_client
         public int serverPort;
         public int clientPort = 0;
         public string userName = "unityTcpClient";
-        public ConcurrentQueue<NetworkGameMessage> ServerMessageQueue { get; } = new ConcurrentQueue<NetworkGameMessage>();
+        public ConcurrentQueue<NetworkGameMessage> ServerMessageQueue { get; private set; }
 
 
         public TcpGameClient() {; }
@@ -37,6 +35,9 @@ namespace unitytest_tcpserver_client
             if (userName != null)
                 this.userName = userName;
             serverPort = port;
+
+            ServerMessageQueue = new ConcurrentQueue<NetworkGameMessage>();
+
             tcpClient = new TcpClient(new IPEndPoint(ipAdress, clientPort));
             tcpClient.Connect(new IPEndPoint(ipAdress, serverPort));
 

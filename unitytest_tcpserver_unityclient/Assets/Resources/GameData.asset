@@ -15,4 +15,4 @@ MonoBehaviour:
   errorSound: {fileID: 0}
   ipAdress: 127.0.0.1
   port: 8000
-  userName: unityclient
+  userName: unitywebclient

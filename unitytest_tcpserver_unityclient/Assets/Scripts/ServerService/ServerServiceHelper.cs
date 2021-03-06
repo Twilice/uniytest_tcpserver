@@ -1,17 +1,12 @@
 ﻿using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
-using System.Linq;
 using System.Net;
-using System.Text;
-using System.Threading;
 using System.Threading.Tasks;
 
 using Newtonsoft.Json;
 
 using UnityEngine;
-
-using unitytest_tcpserver_client;
 
 namespace Assets.Scripts.ServerService
 {
@@ -45,9 +40,20 @@ namespace Assets.Scripts.ServerService
             }
         }
 
-        // global helper functions
+        // temp :: for webgl test to figure out null only
+#if UNITY_WEBGL // && !UNITY_EDITOR
+        [System.Runtime.InteropServices.DllImport("__Internal")]
+        private static extern void SendMessageToBrowser(string message);
+#endif
 
-        public static void InitService<T>(string ipAdress, int port, string name, T alreadyInitializedService = null) where T : class, INetworkGameClient, new()
+        // global helper functions
+        /// <summary>
+        /// Create ServiceHelper instance and create NetworkClient. Client will be stored in static field in ServiceHelper and be used by the static helper functions.
+        /// </summary>
+        /// <typeparam name="T"></typeparam>
+        /// <param name="alreadyInstancedClient">If client is already created by something else.</param>
+        /// <returns></returns>
+        public static INetworkGameClient CreateClient<T>(T alreadyInstancedClient = null) where T : class, INetworkGameClient, new()
         //public static void InitService(string ipAdress, int port, string name)
         {
             if (instance == null)
@@ -55,20 +61,39 @@ namespace Assets.Scripts.ServerService
                 instance = new GameObject("ServerServiceHelper").AddComponent<ServerServiceHelper>();
                 DontDestroyOnLoad(instance);
             }
-            if (alreadyInitializedService != null)
+
+            if (alreadyInstancedClient != null)
             {
-                instance.client = alreadyInitializedService;
+                instance.client = alreadyInstancedClient;
             }
             else
             {
-                instance.client = new T();
+                SendMessageToBrowser("create client dynamic with new T()");
+                instance.client = new T(); // bug? :: is this causing the webgl issues?
+            }
+
+            return instance.client;
+        }
+
+        public static void InitializeClient<T>(string ipAdress, int port, string name) where T : class, INetworkGameClient, new()
+        {
+            SendMessageToBrowser("init client");
+
+            if (instance != null && instance.client != null)
+            {
                 instance.client.InitGameClient(IPAddress.Parse(ipAdress), port, name);
+            }
+            else
+            {
+                Debug.LogError("ServerServiceHelper or NetworkClient is not initialized, but tried to listen on ChatService");
             }
         }
 
         // todo :: we can't force onFail into Task result if exception? We don't want to just run the onFail outside mainthread. Designwise maybe all messages must be "fire and forget" style. Then server sends the request and it's processed there.
         public static void SendChatMessage(string message, Action onComplete, Action onFail)
         {
+            SendMessageToBrowser("helper send chatmessage");
+
             Task<Action> task = Task.Run(() =>
             {
                 try
@@ -104,8 +129,10 @@ namespace Assets.Scripts.ServerService
         */
         Action<ChatMessage> messageCallback = (m) => { Debug.LogWarning("Unhandled message operation"); };
         Action<ChatMessage> userjoinCallback = (m) => { Debug.LogWarning("Unhandled join operation"); };
-        public static void ListenOnChatService(Action<ChatMessage> messageCallback, Action<ChatMessage> userjoinCallback)
+        public static void RegisterChatCallBacks(Action<ChatMessage> messageCallback, Action<ChatMessage> userjoinCallback)
         {
+            SendMessageToBrowser("register helper callbacks");
+
             if (instance == null)
             {
                 Debug.LogError("ServerServiceHelper is not initialized, but tried to listen on ChatService");
@@ -118,9 +145,12 @@ namespace Assets.Scripts.ServerService
 
         private void HandleIncomingMessages()
         {
-            while (client.ServerMessageQueue.Count != 0)
+            SendMessageToBrowser("handle incoming messages");
+
+            ConcurrentQueue<NetworkGameMessage> mq = client.ServerMessageQueue;
+            while (mq.Count != 0) // error :: I'm finding some sources saying concurrentbag.count doesn't work in webgl. Maybe it's cause of out of memory?
             {
-                client.ServerMessageQueue.TryDequeue(out var serverMessage);
+                mq.TryDequeue(out var serverMessage);
 
                 switch (serverMessage.serviceName)
                 {

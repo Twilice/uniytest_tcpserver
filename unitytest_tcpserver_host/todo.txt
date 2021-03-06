@@ -1,6 +1,10 @@
  --- current ---
 
- actually test the code unity/javascript/server code...
+  actually test the code unity/javascript/server code...
+		- compile stuff fixed
+
+   - remove code until no longer null and/or out of memory
+   - figure out of it's unity or browser javascript that is causing out of memory.
 
 
  * json communication finally established between server + javascript client.

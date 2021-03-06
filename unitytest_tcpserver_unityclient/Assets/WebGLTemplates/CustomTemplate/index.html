@@ -36,6 +36,7 @@
     }
 
     function Connect(https, ipadress, username, gameobjectName, onConnectUnityCallback, onRecieveNetworkMessageCallback) {
+      console.log("try connect");
       // todo :: how to wss (https), ws probably only works because local.
       if (https) {
         websocket = new WebSocket("wss://" + ipadress);
@@ -62,6 +63,7 @@
     }
 
     function SendMessageToUnity(gameobjectName, functionName, param) {
+      console.log("send message to unity");
       if (param) {
         unityInstance.SendMessage(gameobjectName, functionName, param);
       }
@@ -71,30 +73,36 @@
     }
 
     function MessageReceivedFromUnity(message) {
-      alert(message);
+      console.log("message from unity: ");
+      console.log(message);
+      //alert(message);
     }
 
     function PipeGameMessageToServer(utf8bytes) {
+      console.log("pipe message from unity");
       websocket.send(utf8bytes);
     }
 
     function SendNetworkMessage(obj) {
-        if (!websocket) {
-            alert("no websocket connection :'(");
-        }
-        let jsonstring = JSON.stringify(obj);
-        websocket.send(utf8encoder.encode(jsonstring));
+      console.log("send network msg to server");
+      if (!websocket) {
+          alert("no websocket connection :'(");
+      }
+      let jsonstring = JSON.stringify(obj);
+      websocket.send(utf8encoder.encode(jsonstring));
     }
 
 
     function Userchatmessage(user, text) {
-            let chatMessage = JSON.stringify(new ChatMessage(user, text));
-            let networkGameMessage = new NetworkGameMessage("chat", "message", [chatMessage]);
-            SendNetworkMessage(networkGameMessage);
-        }
+      console.log("user chat message");
+      let chatMessage = JSON.stringify(new ChatMessage(user, text));
+      let networkGameMessage = new NetworkGameMessage("chat", "message", [chatMessage]);
+      SendNetworkMessage(networkGameMessage);
+    }
 
 
     function GameInitialized() {
+      console.log("Unity Game Initialized")
       unityInstance.progress.style.right = "0%";
       unityInstance.progress.style.backgroundColor = "rgb(0, 80, 255)";
     }
