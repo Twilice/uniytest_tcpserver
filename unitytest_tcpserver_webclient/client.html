@@ -22,10 +22,11 @@
             this.message = msg;
         }
 
+        var username;
         function connect() {
             let https = document.getElementById("https").checked;
             let ipadress = document.getElementById("ipadress").value;
-            let username = document.getElementById("username").value;
+            username = document.getElementById("username").value;
 
             // todo :: how to wss (https), ws probably only works because local.
             if (https) {
@@ -71,8 +72,9 @@
             websocket.send(utf8encoder.encode(jsonstring));
         }
 
-        function Userchatmessage(user, text) {
-            let chatMessage = JSON.stringify(new ChatMessage(user, text));
+        function Userchatmessage() {
+            let text = document.getElementById("usermessage").value;
+            let chatMessage = JSON.stringify(new ChatMessage(username, text));
             let networkGameMessage = new NetworkGameMessage("chat", "message", [chatMessage]);
             SendNetworkMessage(networkGameMessage);
         }

@@ -59,10 +59,10 @@
 
       // todo :: how to wss (https), ws probably only works because local.
       if (https) {
-        websocket = new WebSocket("wss://" + ipadress);
+        websocket = new WebSocket("wss://" + ipadress + ":8001/");
       }
       else {
-        websocket = new WebSocket("ws://" + ipadress);
+        websocket = new WebSocket("ws://" + ipadress + ":8002/");
       }
 
       websocket.onopen = function (e) {
