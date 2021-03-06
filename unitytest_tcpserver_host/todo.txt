@@ -1,6 +1,7 @@
  --- current ---
 
- fix  error server crash because websocket timeout
+ actually test the code unity/javascript/server code...
+
 
  * json communication finally established between server + javascript client.
   - needs mayor refactor + cleaning
@@ -15,6 +16,9 @@ https://developer.mozilla.org/en-US/docs/Web/API/WebSockets_API/Writing_WebSocke
   - also test if ws (http) work outside of localhost, and then check if we can get https working. Or if that is more of a server IT issue rather than coding issue.
 
  --- todo ---
+
+ * fix  error server crash because websocket timeout
+
 
  * refactoring
 
@@ -31,6 +35,8 @@ https://developer.mozilla.org/en-US/docs/Web/API/WebSockets_API/Writing_WebSocke
 
  --- todo later ---
  
+  * need to fix the bytebuffersize to something else than a static 8192 size....
+
  * make multiple services - game / chat / etc.
  
  * make an actual game - current plan is shared painting + chat

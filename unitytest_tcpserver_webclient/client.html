@@ -10,10 +10,6 @@
         const utf8decoder = new TextDecoder("utf-8");
         var websocket;
 
-        function ToNestedJsonText(text) { // javascript nested json parsing lul
-            return "\"" + text + "\"";
-        }
-
         function NetworkGameMessage(service, operation, data) {
             this.serviceName = service;
             this.operationName = operation;
@@ -27,9 +23,6 @@
         }
 
         function connect() {
-            // <label>https<input id="https" type="checkbox"></label>
-            // <input id="ipadress" type="text" placeholder="ipadress">
-            // <input id="username" type="text" placeholder="username">
             let https = document.getElementById("https").checked;
             let ipadress = document.getElementById("ipadress").value;
             let username = document.getElementById("username").value;
@@ -62,7 +55,6 @@
                     //     parsingServerMessage.datamembers = arr; // we have to go deeper xd
                     // }
                     networkGameMessage = parsingServerMessage;
-                    msgFromServer = networkGameMessage;
                     let chatMessage = JSON.parse(networkGameMessage.datamembers[0]);
                     let chatbox = document.getElementById("chatbox");
                     let date = new Date(chatMessage.timestamp);
@@ -71,10 +63,7 @@
             }
         }
 
-     
-        var msgFromServer;
-
-        function sendGameMessage(obj) {
+        function SendNetworkMessage(obj) {
             if (!websocket) {
                 alert("no websocket connection :'(");
             }
@@ -82,12 +71,10 @@
             websocket.send(utf8encoder.encode(jsonstring));
         }
 
-        function userchatmessage() {
-            let user = document.getElementById("username").value;
-            let text = document.getElementById("usermessage").value;
+        function Userchatmessage(user, text) {
             let chatMessage = JSON.stringify(new ChatMessage(user, text));
             let networkGameMessage = new NetworkGameMessage("chat", "message", [chatMessage]);
-            sendGameMessage(networkGameMessage);
+            SendNetworkMessage(networkGameMessage);
         }
 
         // debug bytes
@@ -108,7 +95,7 @@
     </div>
     <div>
         <textarea id="usermessage" rows="5" cols="50" style="display: block;"></textarea>
-        <button onclick="userchatmessage()">send message</button>
+        <button onclick="Userchatmessage()">send message</button>
     </div>
     <div>
         <textarea id="chatbox" rows="20" cols="65" readonly></textarea>

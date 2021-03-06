@@ -7,6 +7,8 @@ using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 
+using Newtonsoft.Json;
+
 using UnityEngine;
 
 using unitytest_tcpserver_client;
@@ -17,6 +19,7 @@ namespace Assets.Scripts.ServerService
     {
         public List<Task<Action>> taskList = new List<Task<Action>>();
         public static ServerServiceHelper instance;
+        private INetworkGameClient client;
 
         void Update()
         {
@@ -44,30 +47,34 @@ namespace Assets.Scripts.ServerService
 
         // global helper functions
 
-        //public static void InitService<T>(T alreadyInitializedService = null) where T : class, IServerService, new() // note : for depency injection. But think I will go other direction for now.
-        public static void InitService(string ipAdress, int port, string name)
+        public static void InitService<T>(string ipAdress, int port, string name, T alreadyInitializedService = null) where T : class, INetworkGameClient, new()
+        //public static void InitService(string ipAdress, int port, string name)
         {
             if (instance == null)
             {
                 instance = new GameObject("ServerServiceHelper").AddComponent<ServerServiceHelper>();
                 DontDestroyOnLoad(instance);
             }
-
-            instance.client = new TcpGameClient(IPAddress.Parse(ipAdress), port, name);
-            instance.client.InitTcpGameClient();
+            if (alreadyInitializedService != null)
+            {
+                instance.client = alreadyInitializedService;
+            }
+            else
+            {
+                instance.client = new T();
+                instance.client.InitGameClient(IPAddress.Parse(ipAdress), port, name);
+            }
         }
 
+        // todo :: we can't force onFail into Task result if exception? We don't want to just run the onFail outside mainthread. Designwise maybe all messages must be "fire and forget" style. Then server sends the request and it's processed there.
         public static void SendChatMessage(string message, Action onComplete, Action onFail)
         {
             Task<Action> task = Task.Run(() =>
             {
                 try
                 {
-                    var success = instance.client.SendMessage(message); // error :: for some reason data doesn't seem to be flushed to server until after task is completed!?
-                    if (success)
-                        return onComplete;
-                    else
-                        return onFail;
+                    instance.client.SendChatMessage(message);
+                    return onComplete;
                 }
                 finally
                 {
@@ -91,6 +98,10 @@ namespace Assets.Scripts.ServerService
 
         }
 
+        /* note :: this is a very special way of doing it because you can't do anything with gameobjects unless it's in unity mainthread. 
+                But since we have 2 services 1 for tcp and another for websocket and they are very different it's not to bad since can work for both ways.
+                Would want/need to rewrite the way we "subscribe with the callbacks" though.
+        */
         Action<ChatMessage> messageCallback = (m) => { Debug.LogWarning("Unhandled message operation"); };
         Action<ChatMessage> userjoinCallback = (m) => { Debug.LogWarning("Unhandled join operation"); };
         public static void ListenOnChatService(Action<ChatMessage> messageCallback, Action<ChatMessage> userjoinCallback)
@@ -104,13 +115,12 @@ namespace Assets.Scripts.ServerService
             instance.userjoinCallback = userjoinCallback;
         }
 
-        private TcpGameClient client;
 
         private void HandleIncomingMessages()
         {
-            while (client.serverMessageQueue.Count != 0)
+            while (client.ServerMessageQueue.Count != 0)
             {
-                client.serverMessageQueue.TryDequeue(out var serverMessage);
+                client.ServerMessageQueue.TryDequeue(out var serverMessage);
 
                 switch (serverMessage.serviceName)
                 {
@@ -126,13 +136,13 @@ namespace Assets.Scripts.ServerService
             }
         }
 
-        private void GameService(TcpGameMessage serverMessage)
+        private void GameService(NetworkGameMessage serverMessage)
         {
 
         }
 
         // todo :: fancy interface something to autohandle/semi-autohandle operations and their parameters.
-        private void ChatService(TcpGameMessage serverMessage)
+        private void ChatService(NetworkGameMessage serverMessage)
         {
             if (serverMessage.operationName == "message")
             {
@@ -140,17 +150,22 @@ namespace Assets.Scripts.ServerService
                 {
                     try
                     {
-                        ChatMessage message = JsonConvertUTF8Bytes.DeserializeObject<ChatMessage>(serverMessage.datamembers[0]);
+                        ChatMessage message = JsonConvert.DeserializeObject<ChatMessage>(serverMessage.datamembers[0]);
                         return (Action)(() => { messageCallback(message); });
                     }
                     finally
                     {
                         try
                         {
+
+                        }
+                        catch (JsonException e)
+                        {
+                            Debug.LogError("Error happened while processing json - service chat - operation join:\n\n" + e + e.InnerException?.Message);
                         }
                         catch (Exception e)
                         {
-                            Debug.LogError("Error happened while processing json:\n\n" + e);
+                            Debug.LogError("Unknown Error happened while calling service chat - operation message:\n\n" + e + e.InnerException?.Message);
                         }
                     }
                 });
@@ -162,17 +177,22 @@ namespace Assets.Scripts.ServerService
                 {
                     try
                     {
-                        ChatMessage message = JsonConvertUTF8Bytes.DeserializeObject<ChatMessage>(serverMessage.datamembers[0]);
+                        ChatMessage message = JsonConvert.DeserializeObject<ChatMessage>(serverMessage.datamembers[0]);
                         return (Action)(() => { userjoinCallback(message); });
                     }
                     finally
                     {
                         try
                         {
+
+                        }
+                        catch (JsonException e)
+                        {
+                            Debug.LogError("Error happened while processing json - service chat - operation join:\n\n" + e + e.InnerException?.Message);
                         }
                         catch (Exception e)
                         {
-                            Debug.LogError("Error happened while processing json:\n\n" + e);
+                            Debug.LogError("Unknown Error happened while calling service chat - operation join:\n\n" + e + e.InnerException?.Message);
                         }
                     }
                 });

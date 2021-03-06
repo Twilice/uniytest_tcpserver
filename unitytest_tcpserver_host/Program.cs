@@ -370,8 +370,8 @@ namespace unitytest_tcpserver_host
             public string serviceName { get; set; }
 
             public string operationName { get; set; }
-            public List<string> datamembers { get; set; }
-            
+            public List<string> datamembers { get; set; } // note :: I wanted this in bytes[], but webgl/browser javascript had to much issue encoding + decoding it. No problem between newtonsoft.json + .net core JsonSerializer though. Maybe possible to revisit in future?
+
             //public List<byte[]> datamembers { get; set; } // to much issue to get javascript to encode/decode like this. Also my brain hurts trying to read the bytes.
 
             [JsonIgnore]

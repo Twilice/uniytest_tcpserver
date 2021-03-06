@@ -11,10 +11,11 @@ using Newtonsoft.Json;
 using System.Globalization;
 using System.IO;
 using UnityEngine;
+using Assets.Scripts.ServerService;
 
 namespace unitytest_tcpserver_client
 {
-    public class TcpGameClient
+    public class TcpGameClient : INetworkGameClient
     {
         // todo :: we should have some depency injection for what services can be used / data can be sent (emulate wcf structure?)
         // todo :: or maybe just send data forward to some service, and that service has the depency injection.
@@ -24,20 +25,18 @@ namespace unitytest_tcpserver_client
         public IPAddress ipAdress;
         public int serverPort;
         public int clientPort = 0;
-        public string userName = "unknown";
-        public ConcurrentQueue<TcpGameMessage> serverMessageQueue = new ConcurrentQueue<TcpGameMessage>();
+        public string userName = "unityTcpClient";
+        public ConcurrentQueue<NetworkGameMessage> ServerMessageQueue { get; } = new ConcurrentQueue<NetworkGameMessage>();
 
 
-        private TcpGameClient() {; }
-        public TcpGameClient(IPAddress ipAdress, int port, string userName = "unknown")
+        public TcpGameClient() {; }
+
+        public void InitGameClient(IPAddress ipAdress, int port, string userName = null)
         {
             this.ipAdress = ipAdress;
-            this.serverPort = port;
-            this.userName = userName;
-        }
-
-        public void InitTcpGameClient()
-        {
+            if (userName != null)
+                this.userName = userName;
+            serverPort = port;
             tcpClient = new TcpClient(new IPEndPoint(ipAdress, clientPort));
             tcpClient.Connect(new IPEndPoint(ipAdress, serverPort));
 
@@ -51,11 +50,11 @@ namespace unitytest_tcpserver_client
 
             try
             {
-                var gameMessage = new TcpGameMessage()
+                var gameMessage = new NetworkGameMessage()
                 {
                     serviceName = "default",
                     operationName = "join",
-                    datamembers = new List<byte[]> { JsonConvertUTF8Bytes.SerializeObject(userName) }
+                    datamembers = new List<string> { JsonConvert.SerializeObject(userName) }
                 };
 
                 var bytes = gameMessage.AsJsonBytes;
@@ -85,16 +84,22 @@ namespace unitytest_tcpserver_client
                 // note :: might be possible to read byte directly similar to how server does it with bson reader - se imported JsonDotNet.pdf for example
                 byte[] jsonBuffer = new byte[readBufferSize];
                 stream.Read(jsonBuffer, 0, jsonBuffer.Length);
-                var gameMessage = JsonConvertUTF8Bytes.DeserializeObject<TcpGameMessage>(jsonBuffer); 
+                var gameMessage = JsonConvertUTF8Bytes.DeserializeObject<NetworkGameMessage>(jsonBuffer); 
 
-                serverMessageQueue.Enqueue(gameMessage);
+                ServerMessageQueue.Enqueue(gameMessage);
 
                 //ThreadPool.QueueUserWorkItem(ReadIncomingStream, stream, true);
                 ThreadPool.QueueUserWorkItem(new WaitCallback(ReadIncomingStream<NetworkStream>), stream);
             }
+            catch (JsonException e)
+            {
+                // todo :: dispose of client? What to do with incorrect json... Many environments will likely cause issue.
+                Console.WriteLine(e.Message + e.InnerException?.Message);
+            }
             catch (IOException e)
             {
-                Debug.Log(e.Message + e.InnerException?.Message);
+                // todo :: dispose of client? Or is error because client already is disposed?
+                Console.WriteLine(e.Message + e.InnerException?.Message);
             }
         }
 
@@ -103,14 +108,14 @@ namespace unitytest_tcpserver_client
             // should actual message processeing be single threaded? Or should it relay again to correct "service" chat/clan/iap/gameLogic and then be "processed" for real?
         }
 
-        public bool SendMessage(string message)
+        public void SendChatMessage(string message)
         {
             if (tcpClient.Connected == false)
             {
                 tcpClient.Dispose();
                 Debug.LogWarning(" ------- not connected to server!");
 
-                InitTcpGameClient();                
+                InitGameClient(ipAdress, serverPort, userName);                
             }
 
             try
@@ -122,11 +127,11 @@ namespace unitytest_tcpserver_client
                     message = message
                 };
 
-                var gameMessage = new TcpGameMessage()
+                var gameMessage = new NetworkGameMessage()
                 {
                     serviceName = "chat",
                     operationName = "message",
-                    datamembers = new List<byte[]> { chatMessage.AsJsonBytes }
+                    datamembers = new List<string> { chatMessage.AsJsonString }
                 };
                 var bytes = gameMessage.AsJsonBytes;
 
@@ -135,59 +140,11 @@ namespace unitytest_tcpserver_client
 
                 var stream = tcpClient.GetStream();
                 stream.Write(bytes, 0, bytes.Length);
-                return true;
             }
             catch (IOException e)
             {
                 Debug.Log(e.Message + e.InnerException?.Message);
-                return false;
             }
-        }
-
-    }
-
-    [Serializable]
-    public class ChatMessage
-    {
-        public DateTime timestamp { get; set; }
-        public string user { get; set; }
-        public string message { get; set; }
-        [JsonIgnore]
-        public string AsJsonString => JsonConvert.SerializeObject(this);
-        [JsonIgnore]
-        public byte[] AsJsonBytes => JsonConvertUTF8Bytes.SerializeObject(this);
-    }
-
-    // if use this contract, make sure client/server are synced.
-    [Serializable]
-    public class TcpGameMessage
-    {
-        // replace names with enums with underlying int/byte?
-
-        // only properties are serialized
-        //[JsonProperty("service")]
-        public string serviceName { get; set; }
-
-        public string operationName { get; set; }
-
-        public List<byte[]> datamembers { get; set; }
-        [JsonIgnore]
-        public string ChatMessageAsJsonString => JsonConvertUTF8Bytes.DeserializeObject<ChatMessage>(datamembers[0]).AsJsonString;
-        [JsonIgnore]
-        public byte[] AsJsonBytes => JsonConvertUTF8Bytes.SerializeObject(this);
-    }
-
-    // note :: have not tested if convert to utf8 is needed. But anyways, it's nice to have data parity in all environments.
-    public static class JsonConvertUTF8Bytes
-    {
-        public static byte[] SerializeObject(object obj)
-        {
-            return System.Text.Encoding.UTF8.GetBytes(JsonConvert.SerializeObject(obj));
-        }
-
-        public static T DeserializeObject<T>(byte[] json)
-        {
-            return (T)JsonConvert.DeserializeObject(System.Text.Encoding.UTF8.GetString(json), typeof(T));
         }
     }
 }

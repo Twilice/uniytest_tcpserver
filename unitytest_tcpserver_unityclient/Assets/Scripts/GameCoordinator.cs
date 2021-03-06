@@ -37,7 +37,10 @@ public class GameCoordinator : MonoBehaviour
     public LazyScriptHandler lazyScriptHandler;
     #endregion
 
-
+#if UNITY_WEBGL // && !UNITY_EDITOR
+    [System.Runtime.InteropServices.DllImport("__Internal")]
+    private static extern void WebGLStartGame();
+#endif
 
     // *** functions ***
     #region functions
@@ -52,11 +55,19 @@ public class GameCoordinator : MonoBehaviour
             throw new NullReferenceException($"{nameof(GameCoordinator)} {transform.name} - scriptableObject type {nameof(GameData)} with name {gameDataName} is missing.");
         gameData = Instantiate(gameData); // don't change the asset object.
 
-        ServerServiceHelper.InitService(gameData.ipAdress, gameData.port, gameData.userName);
+#if UNITY_WEBGL && !UNITY_EDITOR
+        ServerServiceHelper.InitService<WebglGameClient>(gameData.ipAdress, gameData.port, gameData.userName);
+#else
+        ServerServiceHelper.InitService<TcpGameClient>(gameData.ipAdress, gameData.port, gameData.userName);
+#endif
         ServerServiceHelper.ListenOnChatService(RecieveChatMessage, UserJoinedMessage);
 
         lazyScriptHandler = FindObjectOfType<LazyScriptHandler>();
         initialized = true;
+
+#if UNITY_WEBGL && !UNITY_EDITOR
+        WebGLStartGame(); // not actually needed, just tells browser to start the custom html loading bar at 0.
+#endif
     }
 
     public void RecieveChatMessage(ChatMessage chatMessage)
@@ -69,5 +80,5 @@ public class GameCoordinator : MonoBehaviour
         lazyScriptHandler.RecieveChatMessage($"[{chatMessage.timestamp.Hour}:{chatMessage.timestamp.Minute}]<{chatMessage.user}>: {chatMessage.message}");
     }
 
-    #endregion
+#endregion
 }
