@@ -26,7 +26,8 @@ namespace unitytest_tcpserver_host
 
             Console.WriteLine("Hello Server! Awaiting clients.");
 
-            var server = new TcpGameServer(IPAddress.Parse(ipAdress), port);
+            //var server = new TcpGameServer(IPAddress.Parse(ipAdress), port);
+            var server = new TcpGameServer(IPAddress.Any, port);
 
             server.InitTcpGameServer();
 
@@ -143,8 +144,17 @@ namespace unitytest_tcpserver_host
         public void ListenIncomingWebsocketClient()
         {
             httpListener = new HttpListener();
-            httpListener.Prefixes.Add($"http://{ipAdress}/");
-            httpListener.Prefixes.Add($"https://{ipAdress}/");
+
+            if (ipAdress == IPAddress.Any)
+            {
+                httpListener.Prefixes.Add($"https://+:{port+1}/");
+                httpListener.Prefixes.Add($"http://+:{port+2}/");
+            }
+            else
+            {
+                httpListener.Prefixes.Add($"https://{ipAdress}:{port+1}/");
+                httpListener.Prefixes.Add($"http://{ipAdress}:{port+2}/");
+            }
             httpListener.Start();
 
             while (listeningToClients)
