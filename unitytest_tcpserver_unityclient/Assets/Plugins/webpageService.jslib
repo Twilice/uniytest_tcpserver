@@ -23,8 +23,8 @@ mergeInto(LibraryManager.library, {
     RegisterCallBack(Pointer_stringify(gameobjectName), Pointer_stringify(onConnectUnityCallback), Pointer_stringify(onRecieveNetworkMessageCallback));
   },
 
-  ConnectWebglToServer: function(https, ipadress, username) {
+  ConnectWebglToServer: function(ipadress, port, username) {
     console.log("calling webgl conncet");
-    Connect(https, Pointer_stringify(ipadress), Pointer_stringify(username));
+    Connect(Pointer_stringify(ipadress), port, Pointer_stringify(username));
   }
 });

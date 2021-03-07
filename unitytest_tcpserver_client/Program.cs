@@ -15,7 +15,7 @@ namespace unitytest_tcpserver_client
     class Program
     {
         const string ipAdress = "127.0.0.1";
-        const int port = 443;
+        const int port = 8000;
 
         static void Main(string[] args)
         {

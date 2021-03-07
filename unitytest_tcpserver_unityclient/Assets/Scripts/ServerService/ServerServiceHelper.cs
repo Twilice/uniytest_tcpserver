@@ -69,6 +69,7 @@ namespace Assets.Scripts.ServerService
             if (instance != null && instance.client != null)
             {
                 instance.client.InitGameClient(ipAdress, port, name);
+                instance.initialized = true;
             }
             else
             {
@@ -116,7 +117,6 @@ namespace Assets.Scripts.ServerService
 
         private void HandleIncomingMessages()
         {
-            SendMessageToBrowser("handle incoming messages");
             var messages = client.GetUnproccesdNetworkMessages();
             foreach(var msg in messages)
             {
@@ -147,6 +147,7 @@ namespace Assets.Scripts.ServerService
                 try 
                 { 
                     ChatMessage message = JsonConvert.DeserializeObject<ChatMessage>(serverMessage.datamembers[0]);
+                    SendMessageToBrowser("message from: " + message.user + " - " + message.message);
                     messageCallback(message);
                 }
                 catch (JsonException e)

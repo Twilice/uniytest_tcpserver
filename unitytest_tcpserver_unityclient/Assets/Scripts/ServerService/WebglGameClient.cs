@@ -61,7 +61,7 @@ namespace unitytest_tcpserver_webglclient
         [DllImport("__Internal")]
         private static extern void SendNetworkMessageToServer(string utf8byte);
         [DllImport("__Internal")]
-        private static extern void ConnectWebglToServer(int https, string ipadress, string username);
+        private static extern void ConnectWebglToServer(string ipadress, int port, string username);
         [DllImport("__Internal")]
         private static extern void RegisterCallBackToWebgl(string gameobjectName, string onConnectUnityCallback, string onRecieveNetworkMessageCallback);
 #else
@@ -104,19 +104,11 @@ namespace unitytest_tcpserver_webglclient
             {
                 SendMessageToBrowser("begin register callbacks");
 
-                // bug :: is is nameof that doesn't work for webgl? But it should be compile time constant whut...?
-                //RegisterCallBackToWebgl(name, nameof(ServerConnected), nameof(RecieveNetworkGameMessage));
-                RegisterCallBackToWebgl(listenInstance.name, "ServerConnected", "RecieveNetworkGameMessage");
+                RegisterCallBackToWebgl(listenInstance.name, nameof(ServerConnected), nameof(RecieveNetworkGameMessage));
 
                 SendMessageToBrowser("begin connect");
 
-                int https = 0;
-                if (port == -1)
-                {
-                    https = 1;
-                }
-                ConnectWebglToServer(https, ipAdress, userName);
-                    //ConnectWebglToServer();
+                ConnectWebglToServer(ipAdress, port, userName);
             }
             // temp :: debug
             catch (Exception e)
@@ -192,6 +184,8 @@ namespace unitytest_tcpserver_webglclient
             {
                 while (0 < networkMessageQueue.Count)
                 {
+                    SendMessageToBrowser("process message");
+
                     messagesToProcess.Add(networkMessageQueue.Dequeue());
                 }
             }

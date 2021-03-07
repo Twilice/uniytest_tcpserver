@@ -61,7 +61,7 @@ namespace unitytest_tcpserver_host
         public ConcurrentDictionary<IPEndPoint, WebSocket> webClients = null;
         public const int readBufferSize = 8192;
         public IPAddress ipAdress;
-        const int socketPort = 443;
+        const int socketPort = 8000;
         const int wssPort = 443;
         const int wsPort = 80;
         public string serverName = "server";
@@ -120,24 +120,37 @@ namespace unitytest_tcpserver_host
 
             while (listeningToClients)
             {
-                /* note :: do we need to accept these clients on different threads? 
-                        :: Example 1 client is really buggy and disconnects. Will it still try to block and connect.
-                        ::  Or is it at .Read() that it will block? Need to figure out which thread is blocked and code accordingly. */
+                IPEndPoint clientEndPoint = null;
+                try
+                {
+                    /* note :: do we need to accept these clients on different threads? 
+                            :: Example 1 client is really buggy and disconnects. Will it still try to block and connect.
+                            ::  Or is it at .Read() that it will block? Need to figure out which thread is blocked and code accordingly. */
 
-                TcpClient client = tcpListener.AcceptTcpClient();
+                    TcpClient client = tcpListener.AcceptTcpClient();
 
-                // todo :: handle failures to connect
-                client.ReceiveBufferSize = readBufferSize;
+                    // todo :: handle failures to connect
+                    client.ReceiveBufferSize = readBufferSize;
 
 
-                IPEndPoint clientEndPoint = client.Client.RemoteEndPoint as IPEndPoint;
-                Console.WriteLine($"Client connected from {clientEndPoint.Address}:{clientEndPoint.Port}");
+                    clientEndPoint = client.Client.RemoteEndPoint as IPEndPoint;
+                    Console.WriteLine($"Client connected from {clientEndPoint.Address}:{clientEndPoint.Port}");
                 
-                tcpClients[clientEndPoint] = client;              
+                    tcpClients[clientEndPoint] = client;              
 
-                var stream = client.GetStream();
+                    var stream = client.GetStream();
 
-                ThreadPool.QueueUserWorkItem(ReadIncomingStream, stream, true);
+                    Task.Run(() =>
+                    {
+                        ReadIncomingStream(stream);
+                    });
+                }
+                catch (SocketException e)
+                {
+                    Console.WriteLine(e.Message + e.InnerException?.Message);
+                    if (clientEndPoint != null)
+                        tcpClients.TryRemove(clientEndPoint, out _);
+                }
             }
         }
 
@@ -147,35 +160,48 @@ namespace unitytest_tcpserver_host
 
             if (ipAdress == IPAddress.Any)
             {
-                //httpListener.Prefixes.Add($"https://+:{wssPort}/");
+                httpListener.Prefixes.Add($"https://+:{wssPort}/");
                 httpListener.Prefixes.Add($"http://+:{wsPort}/");
             }
             else
             {
-                //httpListener.Prefixes.Add($"https://{ipAdress}:{wssPort}/");
+                httpListener.Prefixes.Add($"https://{ipAdress}:{wssPort}/");
                 httpListener.Prefixes.Add($"http://{ipAdress}:{wsPort}/");
             }
             httpListener.Start();
 
             while (listeningToClients)
             {
-                var listenContext = httpListener.GetContext();
-                IPEndPoint clientEndPoint = listenContext.Request.RemoteEndPoint;
-                var task = listenContext.AcceptWebSocketAsync(null, TimeSpan.FromSeconds(60));
-                var webSocketClient = task.Result.WebSocket; // result is blocking
-                Console.WriteLine($"Client connected from {clientEndPoint.Address}:{clientEndPoint.Port}");
-                webClients[clientEndPoint] = webSocketClient;
+                IPEndPoint clientEndPoint = null;
+                try
+                {
+                    var listenContext = httpListener.GetContext();
+                    clientEndPoint = listenContext.Request.RemoteEndPoint;
+                    var task = listenContext.AcceptWebSocketAsync(null, TimeSpan.FromSeconds(60));
+                    var webSocketClient = task.Result.WebSocket; // result is blocking
+                    Console.WriteLine($"Client connected from {clientEndPoint.Address}:{clientEndPoint.Port}");
+                    webClients[clientEndPoint] = webSocketClient;
 
-                ThreadPool.QueueUserWorkItem(ReadIncomingWebSocketMessage, (clientEndPoint, webSocketClient), true);
+                    Task.Run(() =>
+                    {
+                        ReadIncomingWebSocketMessage(clientEndPoint, webSocketClient);
+                    });
+                }
+                catch (WebSocketException e)
+                {
+                    Console.WriteLine(e.Message + e.InnerException?.Message);
+                    if (clientEndPoint != null)
+                        webClients.TryRemove(clientEndPoint, out _);
+                }
             }
         }
 
-        public void ReadIncomingWebSocketMessage((IPEndPoint endpoint, WebSocket socket) webClient)
+        public void ReadIncomingWebSocketMessage(IPEndPoint endpoint, WebSocket socket)
         {
             try
             {
                 Memory<byte> buffer = new Memory<byte>(new byte[readBufferSize]); // todo :: heap allocated every frame, maybe reserve memory per client instead?
-                var recieve = webClient.socket.ReceiveAsync(buffer, CancellationToken.None);
+                var recieve = socket.ReceiveAsync(buffer, CancellationToken.None);
                 var res = recieve.Result;
                 var eof = res.EndOfMessage;
 
@@ -187,8 +213,8 @@ namespace unitytest_tcpserver_host
                 if (res.MessageType == WebSocketMessageType.Close)
                 {
                     // note :: is this correct? Documentation says initaite or complete the close handshake. So assume client wants to know everything went ok? Or is that done under da hood?
-                    webClient.socket.CloseOutputAsync(WebSocketCloseStatus.NormalClosure, "client initiated disconnect", CancellationToken.None).Wait();
-                    webClients.TryRemove(webClient.endpoint, out _);
+                    socket.CloseOutputAsync(WebSocketCloseStatus.NormalClosure, "client initiated disconnect", CancellationToken.None).Wait();
+                    webClients.TryRemove(endpoint, out _);
                 }
 
                 var jsonReader = new Utf8JsonReader(buffer.Span); // todo :: not sure if buffer here is the json payload from websocket
@@ -196,7 +222,10 @@ namespace unitytest_tcpserver_host
 
                 ProcessIncomingGameMessage(gameMessage);
 
-                ThreadPool.QueueUserWorkItem(ReadIncomingWebSocketMessage, webClient, true);
+                Task.Run(() =>
+                {
+                    ReadIncomingWebSocketMessage(endpoint, socket);
+                });
                 //// todo :: handle stream / tcp package failures and json serialize failures etc.
             }
             catch (JsonException e)
@@ -226,7 +255,10 @@ namespace unitytest_tcpserver_host
                 //// todo :: handle stream / tcp package failures and json serialize failures etc.
 
                 ProcessIncomingGameMessage(gameMessage);
-                ThreadPool.QueueUserWorkItem(ReadIncomingStream, stream, true);
+                Task.Run(() =>
+                {
+                    ReadIncomingStream(stream);
+                });
             }
             catch (JsonException e)
             {

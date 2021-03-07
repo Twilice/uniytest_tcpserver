@@ -71,10 +71,12 @@ public class GameCoordinator : MonoBehaviour
 
         lazyScriptHandler = FindObjectOfType<LazyScriptHandler>();
         ServerServiceHelper.RegisterChatCallBacks(RecieveChatMessage, UserJoinedMessage);
+    }
 
-        // todo :: should do a button to connect (+ reconnect?)
+    public void ConnectToServer()
+    {
 #if UNITY_WEBGL && !UNITY_EDITOR
-        ServerServiceHelper.InitializeClient<WebglGameClient>(gameData.ipAdress, -2, gameData.userName);
+        ServerServiceHelper.InitializeClient<WebglGameClient>(gameData.ipAdress, gameData.port, gameData.userName);
 #else
         ServerServiceHelper.InitializeClient<TcpGameClient>(gameData.ipAdress, gameData.port, gameData.userName);
 #endif
