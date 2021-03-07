@@ -12,40 +12,27 @@ using System.Linq;
 using System.IO;
 using System.Net.WebSockets;
 using System.Linq.Expressions;
+using System.Security.Cryptography.X509Certificates;
 
 namespace unitytest_tcpserver_host
 {
     class Program
     {
-        const string ipAdress = "127.0.0.1";
-
         static void Main(string[] args)
         {
             CultureInfo.DefaultThreadCurrentUICulture = Thread.CurrentThread.CurrentUICulture = CultureInfo.InvariantCulture;
 
             Console.WriteLine("Hello Server! Awaiting clients.");
 
-            //var server = new TcpGameServer(IPAddress.Parse(ipAdress), port);
             var server = new TcpGameServer(IPAddress.Any);
-
+            server.ConnectService(new ChatService(server));
+            server.ConnectService(new PaintGame(server));
             server.InitTcpGameServer();
-
-
-            //server.CheckStreamDataAvaliable();
-
-            //ThreadPool.QueueUserWorkItem(CheckGameMessageForServer, server, false); // error :: I maybe missjudged the inner workings to much. Figure out error, then figure out if how much can be kept as is.
 
             Console.WriteLine("Press <Enter> to exit the server.");
             Console.ReadLine();
+            // todo :: i really should dispose of everyhing better here...
         }
-
-        //static void CheckGameMessageForServer(TcpGameServer server)
-        //{
-        //    server.CheckStreamDataAvaliable();
-
-        //    Thread.Sleep(serverGameMessageCheckFrequency); // todo :: only sleep if we have already processed all requests fast enough. Else continue working!
-        //    ThreadPool.QueueUserWorkItem(CheckGameMessageForServer, server, false);
-        //}
     }
 
     public class TcpGameServer
@@ -56,6 +43,8 @@ namespace unitytest_tcpserver_host
         public Thread websocketListenThread;
         public TcpListener tcpListener;
         public HttpListener httpListener;
+
+        private List<INetworkService> connectedServices = new List<INetworkService>();
 
         public ConcurrentDictionary<IPEndPoint, TcpClient> tcpClients = null;
         public ConcurrentDictionary<IPEndPoint, WebSocket> webClients = null;
@@ -75,6 +64,11 @@ namespace unitytest_tcpserver_host
             this.ipAdress = ipAdress;
         }
 
+        public void ConnectService(INetworkService service)
+        {
+            connectedServices.Add(service);
+        }
+
         public void InitTcpGameServer()
         {
             tcpClients = new ConcurrentDictionary<IPEndPoint, TcpClient>();
@@ -90,27 +84,6 @@ namespace unitytest_tcpserver_host
             websocketListenThread.IsBackground = true;
             websocketListenThread.Start();
         }
-
-        //public void CheckStreamDataAvaliable()
-        //{
-        //    // bug :: current implementation will block other callers if client fails to send / be read. But keep as is for now until figure out why connection is dropped.
-        //    // bug :: wanted to read just a little per client in case of 50000 clients we don't want to keep socket open and listen on them all...
-        //    Parallel.ForEach(tcpClients.Values, client =>
-        //    {
-        //        if (client.Connected == false)
-        //        {
-        //            // can we remove while iterating? .values should be a copy of the values and we remove keys so should be fine.
-        //            tcpClients.Remove(client.Client.RemoteEndPoint, out _);
-        //            return;
-        //        }
-
-
-        //        using (var stream = client.GetStream())
-        //        {
-        //            ReadIncomingStream(stream);
-        //        }
-        //    });
-        //}
 
         public void ListenIncomingClients()
         {
@@ -218,9 +191,9 @@ namespace unitytest_tcpserver_host
                 }
 
                 var jsonReader = new Utf8JsonReader(buffer.Span); // todo :: not sure if buffer here is the json payload from websocket
-                var gameMessage = JsonSerializer.Deserialize<NetworkGameMessage>(ref jsonReader);
+                var gameMessage = JsonSerializer.Deserialize<NetworkMessage>(ref jsonReader);
 
-                ProcessIncomingGameMessage(gameMessage);
+                ProcessIncomingNetworkMessage(gameMessage);
 
                 Task.Run(() =>
                 {
@@ -251,10 +224,10 @@ namespace unitytest_tcpserver_host
                 Span<byte> jsonBuffer = new byte[readBufferSize];
                 stream.Read(jsonBuffer);
                 var jsonReader = new Utf8JsonReader(jsonBuffer);
-                var gameMessage = JsonSerializer.Deserialize<NetworkGameMessage>(ref jsonReader);
+                var gameMessage = JsonSerializer.Deserialize<NetworkMessage>(ref jsonReader);
                 //// todo :: handle stream / tcp package failures and json serialize failures etc.
 
-                ProcessIncomingGameMessage(gameMessage);
+                ProcessIncomingNetworkMessage(gameMessage);
                 Task.Run(() =>
                 {
                     ReadIncomingStream(stream);
@@ -273,53 +246,36 @@ namespace unitytest_tcpserver_host
         }
 
         // message processeing should probably be in it's own thread instead of socketthread? Or should it relay again to correct "service" chat/clan/iap/gameLogic and then be "processed" for real?
-        public void ProcessIncomingGameMessage(NetworkGameMessage gameMessage)
+        public void ProcessIncomingNetworkMessage(NetworkMessage networkMessage)
         {
-            Console.WriteLine($"Server recieved: {gameMessage.serviceName} + {gameMessage.operationName}");
+            var service = connectedServices.FirstOrDefault((x) => x.serviceName == networkMessage.serviceName);
 
-            if (gameMessage.operationName == "message")
+            if (service == null)
             {
-                var chatMessage = JsonSerializer.Deserialize<ChatMessage>(gameMessage.datamembers[0]);
-                BroadcastChatMessage(chatMessage);
+                Console.WriteLine("Error: Service does not exist - " + networkMessage.serviceName);
+                // todo :: incorrect service, disconnect user.
             }
-            else if (gameMessage.operationName == "join")
+            else
             {
-                // note : add to concurrentDictionary?`Or maybe just have it because it looks "cool".
-                var userName = JsonSerializer.Deserialize<string>(gameMessage.datamembers[0]);
-                BroadcastChatMessage(new ChatMessage()
-                {
-                    timestamp = DateTime.Now,
-                    user = "server",
-                    message = $"new client <{userName}> joined the server"
-                });
+                service.ProcessNetworkMessage(networkMessage);
             }
-            else if (gameMessage.operationName == "parsemessagetest")
-            {
-                var chatMessage = JsonSerializer.Deserialize<ChatMessage>(gameMessage.datamembers[0]);
-            }
-
-            //var bytes = JsonSerializer.SerializeToUtf8Bytes<TcpGameMessage>(gameMessage);
-            //stream.Write(bytes);
         }
 
-        public void BroadcastChatMessage(ChatMessage message)
+        public void BroadcastNetworkMessage(NetworkMessage message)
         {
-            Console.WriteLine($"[{message.timestamp.Hour}:{message.timestamp.Minute}]<{message.user}>: {message.message}");
-
-
             Parallel.ForEach(tcpClients, client =>
             {
-                SendChatMessageTcpClient(message, client);
+                SendNetworkMessageTcpClient(message, client);
 
             });
 
             Parallel.ForEach(webClients, client =>
             {
-                SendChatMessageWebsocket(message, client);
+                SendNetworkMessageWebsocket(message, client);
             });
         }
 
-        public void SendChatMessageTcpClient(ChatMessage message, KeyValuePair<IPEndPoint, TcpClient> client)
+        public void SendNetworkMessageTcpClient(NetworkMessage message, KeyValuePair<IPEndPoint, TcpClient> client)
         {
             TcpClient tcpClient = client.Value;
             if (tcpClient.Connected == false)
@@ -336,22 +292,7 @@ namespace unitytest_tcpserver_host
             try
             {
                 var stream = tcpClient.GetStream();
-                var networkMessage = new NetworkGameMessage() { serviceName = "chat", operationName = "message", datamembers = new List<string> { message.AsJsonString } };
-
-                // debug bytes
-                //Console.WriteLine(networkMessage.AsJsonString);
-                //var bytes = networkMessage.AsJsonBytes;
-                //foreach (var b in bytes)
-                //    Console.Write(b + " ");
-                //Console.WriteLine();
-                //Console.WriteLine();
-
-                stream.Write(networkMessage.AsJsonBytes);
-            }
-            catch (JsonException e)
-            {
-                // todo :: dispose of client? What to do with incorrect json... Many environments will likely cause issue.
-                Console.WriteLine(e.Message + e.InnerException?.Message);
+                stream.Write(message.AsJsonBytes);
             }
             catch (IOException e)
             {
@@ -361,7 +302,7 @@ namespace unitytest_tcpserver_host
         }
 
 
-        public void SendChatMessageWebsocket(ChatMessage message, KeyValuePair<IPEndPoint, WebSocket> client)
+        public void SendNetworkMessageWebsocket(NetworkMessage message, KeyValuePair<IPEndPoint, WebSocket> client)
         {
             /* error :: error can occur crashing server, example sometimes when browser reconnect or timeout?
            exception ---> System.Net.HttpListenerException (1229): An operation was attempted on a nonexistent network connection.
@@ -377,12 +318,9 @@ namespace unitytest_tcpserver_host
 
                 return;
             }
-
             try
             {
-                var networkMessage = new NetworkGameMessage() { serviceName = "chat", operationName = "message", datamembers = new List<string> { message.AsJsonString } };
-
-                webClient.SendAsync(networkMessage.AsJsonBytes, WebSocketMessageType.Binary, true, CancellationToken.None).Wait();
+                webClient.SendAsync(message.AsJsonBytes, WebSocketMessageType.Binary, true, CancellationToken.None).Wait();
             }
             catch (JsonException e)
             {
@@ -394,22 +332,12 @@ namespace unitytest_tcpserver_host
                 // todo :: dispose of client? Or is error because client already is disposed?
                 Console.WriteLine(e.Message + e.InnerException?.Message);
             }
-        }
+        }   
 
-        public class ChatMessage
-        {
-            public DateTime timestamp { get; set; }
-            public string user { get; set; }
-            public string message { get; set; }
-
-            [JsonIgnore]
-            public string AsJsonString => JsonSerializer.Serialize(this);
-            [JsonIgnore]
-            public byte[] AsJsonBytes => JsonSerializer.SerializeToUtf8Bytes(this);
-        }
+    
 
         // if use this contract, make sure client/server are synced.
-        public class NetworkGameMessage
+        public class NetworkMessage
         {
             // replace names with enums with underlying int/byte?
 
@@ -422,8 +350,6 @@ namespace unitytest_tcpserver_host
 
             //public List<byte[]> datamembers { get; set; } // to much issue to get javascript to encode/decode like this. Also my brain hurts trying to read the bytes.
 
-            [JsonIgnore]
-            public string ChatMessageAsJsonString => JsonSerializer.Deserialize<ChatMessage>(datamembers[0]).AsJsonString;
             [JsonIgnore]
             public string AsJsonString => JsonSerializer.Serialize(this);
             [JsonIgnore]

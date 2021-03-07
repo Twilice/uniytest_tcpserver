@@ -99,7 +99,7 @@ namespace unitytest_tcpserver_client
                 {
                     var gameMessage = new NetworkGameMessage()
                     {
-                        serviceName = "default",
+                        serviceName = "chat",
                         operationName = "join",
                         datamembers = new List<string> { JsonSerializer.Serialize(userName) }
                     };
