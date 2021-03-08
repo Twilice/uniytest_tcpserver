@@ -26,7 +26,6 @@ namespace unitytest_tcpserver_tcpclient
         public int clientPort = 0;
         public string userName = "unityTcpClient";
         public ConcurrentQueue<NetworkGameMessage> networkMessageQueue;
-
         
 
         public TcpGameClient() {; }

@@ -11,8 +11,9 @@ using System.Globalization;
 using System.Linq;
 using System.IO;
 using System.Net.WebSockets;
-using System.Linq.Expressions;
-using System.Security.Cryptography.X509Certificates;
+using static unitytest_tcpserver_host.TcpGameServer;
+using static unitytest_tcpserver_host.PaintGame;
+using System.Runtime.CompilerServices;
 
 namespace unitytest_tcpserver_host
 {
@@ -29,7 +30,6 @@ namespace unitytest_tcpserver_host
             server.ConnectService(new PaintGame(server));
             server.InitTcpGameServer();
 
-            Console.WriteLine("Press <Enter> to exit the server.");
             Console.ReadLine();
             // todo :: i really should dispose of everyhing better here...
         }
@@ -57,6 +57,18 @@ namespace unitytest_tcpserver_host
 
         // maybes / not implemented yet state variables
         public bool listeningToClients = true;
+        private static JsonSerializerOptions _relaxedJsonEscaping;
+        public static JsonSerializerOptions RelaxedJsonEscaping {
+            get 
+            {
+                if (_relaxedJsonEscaping == null)
+                {
+                    _relaxedJsonEscaping = new JsonSerializerOptions();
+                    _relaxedJsonEscaping.Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping;
+                }
+                return _relaxedJsonEscaping;
+            }
+        }
 
         private TcpGameServer() {;}
         public TcpGameServer(IPAddress ipAdress)
@@ -257,16 +269,18 @@ namespace unitytest_tcpserver_host
             }
             else
             {
+                Console.WriteLine($"Server recieved: {networkMessage.serviceName} + {networkMessage.operationName}");
+
                 service.ProcessNetworkMessage(networkMessage);
             }
         }
 
         public void BroadcastNetworkMessage(NetworkMessage message)
         {
+            // todo :: we should send to webclients in parallel, since if 1 tcp client is blocking we block all webclients
             Parallel.ForEach(tcpClients, client =>
             {
                 SendNetworkMessageTcpClient(message, client);
-
             });
 
             Parallel.ForEach(webClients, client =>
@@ -275,7 +289,7 @@ namespace unitytest_tcpserver_host
             });
         }
 
-        public void SendNetworkMessageTcpClient(NetworkMessage message, KeyValuePair<IPEndPoint, TcpClient> client)
+        public async void SendNetworkMessageTcpClient(NetworkMessage message, KeyValuePair<IPEndPoint, TcpClient> client)
         {
             TcpClient tcpClient = client.Value;
             if (tcpClient.Connected == false)
@@ -292,7 +306,7 @@ namespace unitytest_tcpserver_host
             try
             {
                 var stream = tcpClient.GetStream();
-                stream.Write(message.AsJsonBytes);
+                await stream.WriteAsync(message.AsJsonBytes);
             }
             catch (IOException e)
             {
@@ -302,7 +316,7 @@ namespace unitytest_tcpserver_host
         }
 
 
-        public void SendNetworkMessageWebsocket(NetworkMessage message, KeyValuePair<IPEndPoint, WebSocket> client)
+        public async void SendNetworkMessageWebsocket(NetworkMessage message, KeyValuePair<IPEndPoint, WebSocket> client)
         {
             /* error :: error can occur crashing server, example sometimes when browser reconnect or timeout?
            exception ---> System.Net.HttpListenerException (1229): An operation was attempted on a nonexistent network connection.
@@ -320,7 +334,7 @@ namespace unitytest_tcpserver_host
             }
             try
             {
-                webClient.SendAsync(message.AsJsonBytes, WebSocketMessageType.Binary, true, CancellationToken.None).Wait();
+                await webClient.SendAsync(message.AsJsonBytes, WebSocketMessageType.Binary, true, CancellationToken.None);
             }
             catch (JsonException e)
             {
@@ -351,9 +365,11 @@ namespace unitytest_tcpserver_host
             //public List<byte[]> datamembers { get; set; } // to much issue to get javascript to encode/decode like this. Also my brain hurts trying to read the bytes.
 
             [JsonIgnore]
-            public string AsJsonString => JsonSerializer.Serialize(this);
+            public string AsJsonString => JsonSerializer.Serialize(this, RelaxedJsonEscaping);
             [JsonIgnore]
-            public byte[] AsJsonBytes => JsonSerializer.SerializeToUtf8Bytes(this);
+            public byte[] AsJsonBytes => JsonSerializer.SerializeToUtf8Bytes(this, RelaxedJsonEscaping);
         }
+
+        
     }
 }

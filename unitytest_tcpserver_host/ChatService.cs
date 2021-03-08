@@ -26,8 +26,6 @@ namespace unitytest_tcpserver_host
         {
             try
             {
-                Console.WriteLine($"Server recieved: {networkMessage.serviceName} + {networkMessage.operationName}");
-
                 if (networkMessage.operationName == "message")
                 {
                     var chatMessage = JsonSerializer.Deserialize<ChatMessage>(networkMessage.datamembers[0]);
