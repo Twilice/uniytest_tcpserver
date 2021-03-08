@@ -6,6 +6,7 @@ using System.Net;
 using System.Runtime.InteropServices;
 #endif
 using Assets.Scripts.ServerService;
+using Assets.Scripts.ServerServiceHelper;
 
 using Newtonsoft.Json;
 
@@ -67,7 +68,7 @@ namespace unitytest_tcpserver_webglclient
 #else
         private static void SendMessageToBrowser(string _) {;}
         private static void SendNetworkMessageToServer(string _) {;}
-        private static void ConnectWebglToServer(int _, string _2, string _3) {;}
+        private static void ConnectWebglToServer(string _2, int _, string _3) {;}
         private static void RegisterCallBackToWebgl(string _, string _2, string _3) {;}
 #endif
 
@@ -96,6 +97,7 @@ namespace unitytest_tcpserver_webglclient
             this.ipAdress = ipAdress;
             this.port = port;
             ConnectToServer();
+            ServerServiceHelper.instance.initialized = true;
         }
 
         private void ConnectToServer()
@@ -197,6 +199,11 @@ namespace unitytest_tcpserver_webglclient
                 }
             }
             return messagesToProcess;
+        }
+
+        public void SendPixelUpdate(Pixels pixels)
+        {
+            throw new NotImplementedException();
         }
     }
 }

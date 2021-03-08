@@ -11,6 +11,7 @@ using System.IO;
 using UnityEngine;
 using Assets.Scripts.ServerService;
 using System.Threading.Tasks;
+using Assets.Scripts.ServerServiceHelper;
 
 namespace unitytest_tcpserver_tcpclient
 {
@@ -143,9 +144,6 @@ namespace unitytest_tcpserver_tcpclient
                 };
                 var bytes = gameMessage.AsJsonBytes;
 
-                var test = JsonConvert.SerializeObject(chatMessage);
-                var test2 = JsonConvert.SerializeObject(gameMessage);
-
                 var stream = tcpClient.GetStream();
                 stream.Write(bytes, 0, bytes.Length);
             }
@@ -173,6 +171,35 @@ namespace unitytest_tcpserver_tcpclient
                 }
             }
             return messagesToProcess;
+        }
+
+        public void SendPixelUpdate(Pixels pixels)
+        {
+            if (tcpClient.Connected == false)
+            {
+                tcpClient.Dispose();
+                Debug.LogWarning(" ------- not connected to server!");
+
+                InitGameClient(ipAdress, serverPort, userName);
+            }
+
+            try
+            {
+                var gameMessage = new NetworkGameMessage()
+                {
+                    serviceName = "game",
+                    operationName = "newPixels",
+                    datamembers = new List<string> { pixels.AsJsonString }
+                };
+                var bytes = gameMessage.AsJsonBytes;
+
+                var stream = tcpClient.GetStream();
+                stream.Write(bytes, 0, bytes.Length);
+            }
+            catch (IOException e)
+            {
+                Debug.Log(e.Message + e.InnerException?.Message);
+            }
         }
     }
 }

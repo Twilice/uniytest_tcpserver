@@ -1,7 +1,7 @@
 ﻿using System.Collections;
 using System.Collections.Generic;
 
-using Assets.Scripts.ServerService;
+using Assets.Scripts.ServerServiceHelper;
 
 using UnityEngine;
 using UnityEngine.UI;
@@ -32,7 +32,7 @@ public class LazyScriptHandler : MonoBehaviour
         ServerServiceHelper.SendChatMessage(message);
     }
 
-    public void RecieveChatMessage(string message)
+    public void ReceiveChatMessage(string message)
     {
         chatMessages.text += message + "\n";
     }

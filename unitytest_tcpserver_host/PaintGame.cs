@@ -17,10 +17,11 @@ namespace unitytest_tcpserver_host
     {
         TcpGameServer server;
         public string serviceName { get => "game"; private set => throw new InvalidOperationException(); }
+
         private Texture texture = new Texture(64, 64);
 
         const int updatePerSecond = 60;
-        const int delayTimeMilliseconds = 1000 / updatePerSecond;
+        const int delayTimeMilliseconds = 1000 / updatePerSecond; // rounding error, we wait a little to long.
         private PaintGame() {; }
         public PaintGame(TcpGameServer server)
         {
@@ -40,8 +41,8 @@ namespace unitytest_tcpserver_host
             });
             try
             {
-                bool canceled = t.Wait(delayTimeMilliseconds * updatePerSecond);
-                if (canceled)
+                bool completed = t.Wait(delayTimeMilliseconds * updatePerSecond /* debug long time*/);
+                if (completed == false)
                 {
                     Console.WriteLine("PaintGame took to long to TICK - BroadCastNewPixels -" + delayTimeMilliseconds * updatePerSecond + " milliseconds executionTime");
                     // todo :: kick some lazy clients so they stop hogging the server. ( or something depending on why it took so long
@@ -73,6 +74,8 @@ namespace unitytest_tcpserver_host
                     pixels.pixels.Add(new Pixel(position, color));
                 }
             }
+            
+            if (pixels.pixels.Count == 0) return;
 
             const int maxPixelPerMessage = 100;
             NetworkMessage networkMessage;
@@ -134,33 +137,41 @@ namespace unitytest_tcpserver_host
 
         public class Texture
         {
-            public Color[,] pixels;
+            private static readonly object initLock = new object();
+            private readonly Color[,] pixels;
             public int width;
             public int height;
-            public Color this[int x, int y]
+            public Color this[int x, int y] 
             {
                 get
                 {
                     return pixels[x, y];
                 }
-                set
+                set // thread safe set
                 {
-                    pixels[x, y] = value;
+                    lock (initLock)
+                    {
+                        pixels[x % width, y % height] = value;
+                    }
                 }
             }
 
-            public Color this[Position pos]
+            public Color this[Position pos] 
             {
                 get
                 {
                     return pixels[pos.x, pos.y];
                 }
-                set
+                set // thread safe set
                 {
-                    pixels[pos.x, pos.y] = value;
+                    lock (initLock)
+                    {
+                        
+                            pixels[pos.x % width, pos.y % height] = value;
+                    }
+
                 }
             }
-
 
             private Texture() {;}
             public Texture(int width, int height)
@@ -228,8 +239,8 @@ namespace unitytest_tcpserver_host
                 }
                 else
                 {
-                    Position ncol = (Position)obj;
-                    return (x == ncol.x) && (y == ncol.y);
+                    Position col = (Position)obj;
+                    return (x == col.x) && (y == col.y);
                 }
             }
 

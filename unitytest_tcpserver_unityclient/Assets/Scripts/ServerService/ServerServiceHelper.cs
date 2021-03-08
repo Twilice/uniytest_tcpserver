@@ -1,11 +1,14 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.Net;
+
+using Assets.Scripts.ServerService;
 
 using Newtonsoft.Json;
 
 using UnityEngine;
 
-namespace Assets.Scripts.ServerService
+namespace Assets.Scripts.ServerServiceHelper
 {
     public class ServerServiceHelper : MonoBehaviour
     {
@@ -69,7 +72,6 @@ namespace Assets.Scripts.ServerService
             if (instance != null && instance.client != null)
             {
                 instance.client.InitGameClient(ipAdress, port, name);
-                instance.initialized = true;
             }
             else
             {
@@ -89,11 +91,47 @@ namespace Assets.Scripts.ServerService
                 ErrorDebugMessage(e);
             }
         }
-    
-        public static void ListenOnGameService()
-        {
 
+        // todo :: await more pixels?
+        public static void SendPixelUpdate(Pixel pixel)
+        {
+            try
+            {
+                SendMessageToBrowser("helper send pixelUpdate");
+                instance.client.SendPixelUpdate(new Pixels { pixels = new List<Pixel> { pixel } });
+            }
+            catch (Exception e)
+            {
+                ErrorDebugMessage(e);
+            }
         }
+
+        public static void SendPixelUpdate(Pixels pixels)
+        {
+            try
+            {
+                SendMessageToBrowser("helper send pixelUpdate");
+                instance.client.SendPixelUpdate(pixels);
+            }
+            catch (Exception e)
+            {
+                ErrorDebugMessage(e);
+            }
+        }
+
+        Action<Pixels> pixelUpdateCallback = (p) => { Debug.LogWarning("Unhandled pixelUpdate operation"); };
+        public static void RegisterGameCallBacks(Action<Pixels> pixelUpdateCallback)
+        {
+            SendMessageToBrowser("register game callbacks");
+
+            if (instance == null)
+            {
+                Debug.LogError("ServerServiceHelper is not initialized, but tried to listen on GameService");
+                return;
+            }
+            instance.pixelUpdateCallback = pixelUpdateCallback;
+        }
+
 
         /* note :: this is a very special way of doing it because you can't do anything with gameobjects unless it's in unity mainthread. 
                 But since we have 2 services 1 for tcp and another for websocket and they are very different it's not to bad since can work for both ways.
@@ -103,7 +141,7 @@ namespace Assets.Scripts.ServerService
         Action<ChatMessage> userjoinCallback = (m) => { Debug.LogWarning("Unhandled join operation"); };
         public static void RegisterChatCallBacks(Action<ChatMessage> messageCallback, Action<ChatMessage> userjoinCallback)
         {
-            SendMessageToBrowser("register helper callbacks");
+            SendMessageToBrowser("register chat callbacks");
 
             if (instance == null)
             {
@@ -136,7 +174,22 @@ namespace Assets.Scripts.ServerService
 
         private void GameService(NetworkGameMessage serverMessage)
         {
-
+            if (serverMessage.operationName == "pixelUpdate")
+            {
+                try
+                {
+                    Pixels updatedPixels = JsonConvert.DeserializeObject<Pixels>(serverMessage.datamembers[0]);
+                    pixelUpdateCallback(updatedPixels);
+                }
+                catch (JsonException e)
+                {
+                    ErrorDebugMessage(e, "Error happened while processing json - service game - operation pixelUpdate:\n");
+                }
+                catch (Exception e)
+                {
+                    ErrorDebugMessage(e, "Unknown Error happened while calling service game - operation pixelUpdate:\n");
+                }
+            }
         }
 
         // todo :: fancy interface something to autohandle/semi-autohandle operations and their parameters.

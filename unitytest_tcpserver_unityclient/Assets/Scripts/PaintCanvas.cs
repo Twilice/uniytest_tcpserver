@@ -2,11 +2,18 @@
 using System.Collections.Generic;
 using System.Reflection.Emit;
 
+using Assets.Scripts.ServerServiceHelper;
+
 using UnityEngine;
 using UnityEngine.EventSystems;
 using UnityEngine.UI;
 
-public class Paint : MonoBehaviour, IPointerEnterHandler, IPointerExitHandler, IPointerDownHandler, IPointerUpHandler
+using ServerPixel = Assets.Scripts.ServerService.Pixel;
+using ServerPixels = Assets.Scripts.ServerService.Pixels;
+using ServerColor = Assets.Scripts.ServerService.Color;
+using System;
+
+public class PaintCanvas : MonoBehaviour, IPointerEnterHandler, IPointerExitHandler, IPointerDownHandler, IPointerUpHandler
 {
     //public RenderTexture rt;
     public Texture2D tex;
@@ -31,6 +38,15 @@ public class Paint : MonoBehaviour, IPointerEnterHandler, IPointerExitHandler, I
         trigger.triggers.Add(entry);
     }
 
+    public void ReceivePixelUpdate(ServerPixels pixels)
+    {
+        foreach(var pixel in pixels.pixels)
+        {
+            tex.SetPixel(pixel.x, pixel.y, new Color(pixel.color.red, pixel.color.green, pixel.color.blue, pixel.color.alpha));
+            tex.Apply();
+        }
+    }
+
     void Update()
     {
 
@@ -39,8 +55,11 @@ public class Paint : MonoBehaviour, IPointerEnterHandler, IPointerExitHandler, I
     public void OnDraw(PointerEventData eventData)
     {
         var pixels = PointerDataToPixelPos(eventData);
-        tex.SetPixel(pixels.x, pixels.y, Color.red);
+        tex.SetPixel(pixels.x, pixels.y, col);
         tex.Apply();
+        ServerPixel pixel = new ServerPixel(pixels.x, pixels.y,new ServerColor(Convert.ToByte(col.r * 255), Convert.ToByte(col.g*255), Convert.ToByte(col.b*255), Convert.ToByte(col.a*255)) );
+        ServerServiceHelper.SendPixelUpdate(pixel);
+
     }
 
     public void OnPointerDown(PointerEventData eventData)
@@ -71,13 +90,13 @@ public class Paint : MonoBehaviour, IPointerEnterHandler, IPointerExitHandler, I
 
         float xPercentage = pos.x / rectT.rect.width;
         float yPercentage = pos.y / rectT.rect.height;
-        float pixelPosX = tex.width * xPercentage;
-        float pixelPosY = tex.height * yPercentage;
+        float pixelPosX = width * xPercentage;
+        float pixelPosY = height * yPercentage;
 
-        if (pixelPosX == tex.width)
+        if (pixelPosX == width)
             pixelPosX--;
 
-        if (pixelPosY == tex.height)
+        if (pixelPosY == height)
             pixelPosY--;
 
         return new Vector2Int((int)pixelPosX, (int)pixelPosY);
@@ -89,7 +108,7 @@ public class Paint : MonoBehaviour, IPointerEnterHandler, IPointerExitHandler, I
         Vector2 clickPosition = eventData.position;
 
         RectTransformUtility.ScreenPointToLocalPointInRectangle(rectT, clickPosition, null, out result);
-        result += rectT.rect.size / 2;
+        result += rectT.rect.size; // todo :: divide with anchor/pivot for correct size if they are changed.
 
         return result;
     }

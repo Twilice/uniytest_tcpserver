@@ -1,5 +1,7 @@
 ﻿using System;
 using Assets.Scripts.ServerService;
+using Assets.Scripts.ServerServiceHelper;
+
 using InvocationFlow;
 using UnityEngine;
 
@@ -34,7 +36,8 @@ public class GameCoordinator : MonoBehaviour
     public GameData gameData;
     public AudioSource audioSource;
     public LazyScriptHandler lazyScriptHandler;
-#endregion
+    public PaintCanvas paintBoard;
+    #endregion
 
 #if UNITY_WEBGL // && !UNITY_EDITOR
     [System.Runtime.InteropServices.DllImport("__Internal")]
@@ -70,7 +73,9 @@ public class GameCoordinator : MonoBehaviour
 #endif
 
         lazyScriptHandler = FindObjectOfType<LazyScriptHandler>();
+        paintBoard = FindObjectOfType<PaintCanvas>();
         ServerServiceHelper.RegisterChatCallBacks(RecieveChatMessage, UserJoinedMessage);
+        ServerServiceHelper.RegisterGameCallBacks(RecievePixelUpdate);
     }
 
     public void ConnectToServer()
@@ -82,14 +87,19 @@ public class GameCoordinator : MonoBehaviour
 #endif
     }
 
+    public void RecievePixelUpdate(Pixels pixels)
+    {
+        paintBoard.ReceivePixelUpdate(pixels);
+    }
+
     public void RecieveChatMessage(ChatMessage chatMessage)
     {
-        lazyScriptHandler.RecieveChatMessage($"[{chatMessage.timestamp.Hour}:{chatMessage.timestamp.Minute}]<{chatMessage.user}>: {chatMessage.message}");
+        lazyScriptHandler.ReceiveChatMessage($"[{chatMessage.timestamp.Hour}:{chatMessage.timestamp.Minute}]<{chatMessage.user}>: {chatMessage.message}");
     }
 
     public void UserJoinedMessage(ChatMessage chatMessage)
     {
-        lazyScriptHandler.RecieveChatMessage($"[{chatMessage.timestamp.Hour}:{chatMessage.timestamp.Minute}]<{chatMessage.user}>: {chatMessage.message}");
+        lazyScriptHandler.ReceiveChatMessage($"[{chatMessage.timestamp.Hour}:{chatMessage.timestamp.Minute}]<{chatMessage.user}>: {chatMessage.message}");
     }
 
 #endregion

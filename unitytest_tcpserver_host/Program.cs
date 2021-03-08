@@ -172,6 +172,12 @@ namespace unitytest_tcpserver_host
                         ReadIncomingWebSocketMessage(clientEndPoint, webSocketClient);
                     });
                 }
+                catch (AggregateException e) // note :: maybe more safeguarding code? Seems this is caused by something spooky on the web scanning server
+                {
+                    Console.WriteLine(e.Message + e.InnerException?.Message);
+                    if (clientEndPoint != null)
+                        webClients.TryRemove(clientEndPoint, out _);
+                }
                 catch (WebSocketException e)
                 {
                     Console.WriteLine(e.Message + e.InnerException?.Message);
@@ -269,7 +275,7 @@ namespace unitytest_tcpserver_host
             }
             else
             {
-                Console.WriteLine($"Server recieved: {networkMessage.serviceName} + {networkMessage.operationName}");
+                //Console.WriteLine($"Server recieved: {networkMessage.serviceName} + {networkMessage.operationName}");
 
                 service.ProcessNetworkMessage(networkMessage);
             }
