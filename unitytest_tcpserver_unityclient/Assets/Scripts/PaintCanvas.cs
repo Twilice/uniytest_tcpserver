@@ -43,8 +43,8 @@ public class PaintCanvas : MonoBehaviour, IPointerEnterHandler, IPointerExitHand
         foreach(var pixel in pixels.pixels)
         {
             tex.SetPixel(pixel.x, pixel.y, new Color(pixel.color.red, pixel.color.green, pixel.color.blue, pixel.color.alpha));
-            tex.Apply();
         }
+        tex.Apply();
     }
 
     void Update()

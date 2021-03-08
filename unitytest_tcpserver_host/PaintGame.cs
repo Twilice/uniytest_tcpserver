@@ -79,8 +79,10 @@ namespace unitytest_tcpserver_host
 
             const int maxPixelPerMessage = 100;
             NetworkMessage networkMessage;
+            Console.WriteLine("Many pixels" + pixels.pixels.Count);
             while (maxPixelPerMessage < pixels.pixels.Count)
             {
+                Console.WriteLine("Many Many pixels" + pixels.pixels.Count);
                 Pixels pixelsToSend = new Pixels { pixels = pixels.pixels.Take(100).ToList() };
                 networkMessage = new NetworkMessage() { serviceName = "game", operationName = "pixelUpdate", datamembers = new List<string> { pixelsToSend.AsJsonString } };
                 server.BroadcastNetworkMessage(networkMessage);

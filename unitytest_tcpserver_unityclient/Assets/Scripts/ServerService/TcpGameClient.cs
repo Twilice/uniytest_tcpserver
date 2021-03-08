@@ -41,6 +41,7 @@ namespace unitytest_tcpserver_tcpclient
                 serverPort = port;
 
                 networkMessageQueue = new ConcurrentQueue<NetworkGameMessage>();
+                Debug.Log($"Try connect to server {ipAdress}:{serverPort}");
 
                 //tcpClient = new TcpClient(new IPEndPoint(ipAdress, clientPort));
                 tcpClient = new TcpClient(ipAdress, serverPort);
@@ -119,6 +120,8 @@ namespace unitytest_tcpserver_tcpclient
 
         public void SendChatMessage(string message)
         {
+            if (tcpClient == null)
+                return;
             if (tcpClient.Connected == false)
             {
                 tcpClient.Dispose();
@@ -175,6 +178,8 @@ namespace unitytest_tcpserver_tcpclient
 
         public void SendPixelUpdate(Pixels pixels)
         {
+            if (tcpClient == null)
+                return;
             if (tcpClient.Connected == false)
             {
                 tcpClient.Dispose();

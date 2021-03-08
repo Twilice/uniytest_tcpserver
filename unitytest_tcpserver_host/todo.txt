@@ -1,44 +1,39 @@
  --- current ---
 
- * threads are not running at all on webgl even if built with "support".
-	- rebuild interface to not have any thread, move all threading to tcpClient.
-
-   * add connect button from unity instead of autoconnect on start
-
-  * host somewhere to test real life case
-  - also include test from android .apk
-  - also test if ws (http) work outside of localhost, and then check if we can get https working. Or if that is more of a server IT issue rather than coding issue.
+  * add colorpicker to choose color
+ 
+  * figure out why client suddenly now get "randomly" disconnected - (it's not random, it is painting something error. maybe overload?)
+	- if tickrate is reduced to 5 on server the error stops happening. So next step is probably to do a mayor refactoring to fix proper disposing and better threading.
+	- also pixels also disappear, probably related to connection failures. (or floating point error) - Messages do not disappear.
 
  --- todo ---
 
- * fix  error server crash because websocket timeout
 
 
  * refactoring
 
  * little better error handling
- 
- * more service like for game
-  
-* fix
----- > '0x00' is an invalid start of a value. Path: $ | LineNumber: 0 | BytePositionInLine: 0.'0x00' is an invalid start of a value. LineNumber: 0 | BytePositionInLine: 0.
- when webclient is closed/refreshed
 
- * javascript timezone.
-	- not important, we don't actually care about pure html? It should just send to unity anyways?
+ * did I say error handling? Need to add a clean way of closing clients manually as well.
+ 
+ * dispose tcpClients if they are disconnected... now we only do it in broadcast. (not fixed yet duo some confusion how socket/tcpClient/stream resources should be disposed correctly)
+  
 
  --- todo later ---
  
-  * need to fix the bytebuffersize to something else than a static 8192 size....
+  * host somewhere to test real life case
+	- need to fix more stable error handling before I start to host it somehwere
+	- skip websocket for now... because it needs wss / https etc.
 
- * make multiple services - game / chat / etc.
- 
- * make an actual game - current plan is shared painting + chat
+  * need to fix the bytebuffersize to something else than a static 8192 size....
 
  * figure out how to continuously listen on messages from the client. But without permanently listening to read request. 
 	- We want to be able to have 50k clients, but not listen to 50k clients at the same time.
  
- * dispose tcpClients if they are disconnected... now we only do it in broadcast. (not fixed yet duo some confusion how socket/tcpClient/stream resources should be disposed correctly)
+ 
+ 
+ * javascript timezone.
+	- not important, we don't actually care about pure html? It should just send to unity anyways?
 
  --- think about ---
 
