@@ -20,7 +20,7 @@ namespace unitytest_tcpserver_host
 
         private Texture texture = new Texture(64, 64);
 
-        const int updatePerSecond = 60;
+        const int updatePerSecond = 15;
         const int delayTimeMilliseconds = 1000 / updatePerSecond; // rounding error, we wait a little to long.
         private PaintGame() {; }
         public PaintGame(TcpGameServer server)
@@ -79,7 +79,6 @@ namespace unitytest_tcpserver_host
 
             const int maxPixelPerMessage = 100;
             NetworkMessage networkMessage;
-            Console.WriteLine("Many pixels" + pixels.pixels.Count);
             while (maxPixelPerMessage < pixels.pixels.Count)
             {
                 Console.WriteLine("Many Many pixels" + pixels.pixels.Count);

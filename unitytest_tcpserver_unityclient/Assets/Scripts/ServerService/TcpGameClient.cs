@@ -99,7 +99,11 @@ namespace unitytest_tcpserver_tcpclient
                 networkMessageQueue.Enqueue(gameMessage);
 
                 //ThreadPool.QueueUserWorkItem(ReadIncomingStream, stream, true);
-                ThreadPool.QueueUserWorkItem(new WaitCallback(ReadIncomingStream<NetworkStream>), stream);
+                //ThreadPool.QueueUserWorkItem(new WaitCallback(ReadIncomingStream<NetworkStream>), stream);
+                Task.Run(() =>
+                {
+                    ReadIncomingStream<NetworkStream>(stream);
+                });
             }
             catch (JsonException e)
             {
