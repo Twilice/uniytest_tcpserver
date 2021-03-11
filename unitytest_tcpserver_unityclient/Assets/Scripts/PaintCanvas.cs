@@ -13,17 +13,25 @@ using ServerPixels = Assets.Scripts.ServerService.Pixels;
 using ServerColor = Assets.Scripts.ServerService.Color;
 using System;
 
-public class PaintCanvas : MonoBehaviour, IPointerEnterHandler, IPointerExitHandler, IPointerDownHandler, IPointerUpHandler
+public class PaintCanvas : MonoBehaviour
 {
     //public RenderTexture rt;
-    public Texture2D tex;
-    public RectTransform rectT;
+    private Texture2D tex;
+    private RectTransform rectT;
     public Color col;
     public int width = 64;
     public int height = 64;
+    public ColorPicker colorPicker;
+    public ColorPicker_Hue colorPickerHue;
+    public static PaintCanvas instance;
 
     void Start()
     {
+        if (instance != null)
+        {
+            Debug.LogError("Multiple PaintCanvas not implemented yet.");
+        }
+        instance = this;
         rectT = GetComponent<RectTransform>();
         var rawimg = GetComponent<RawImage>();
         //rt = rawimg.mainTexture as RenderTexture;
@@ -36,6 +44,16 @@ public class PaintCanvas : MonoBehaviour, IPointerEnterHandler, IPointerExitHand
         entry.eventID = EventTriggerType.Drag;
         entry.callback.AddListener((data) => { OnDraw((PointerEventData)data); });
         trigger.triggers.Add(entry);
+
+        entry = new EventTrigger.Entry();
+        entry.eventID = EventTriggerType.PointerDown;
+        entry.callback.AddListener((data) => { OnDraw((PointerEventData)data); });
+        trigger.triggers.Add(entry);
+    }
+
+    public void UpdateColor()
+    {
+        col = Color.HSVToRGB(colorPicker.hue, colorPicker.saturation, colorPicker.value);
     }
 
     public void ReceivePixelUpdate(ServerPixels pixels)
@@ -47,11 +65,6 @@ public class PaintCanvas : MonoBehaviour, IPointerEnterHandler, IPointerExitHand
         tex.Apply();
     }
 
-    void Update()
-    {
-
-    }
-
     public void OnDraw(PointerEventData eventData)
     {
         var pixels = PointerDataToPixelPos(eventData);
@@ -60,24 +73,6 @@ public class PaintCanvas : MonoBehaviour, IPointerEnterHandler, IPointerExitHand
         ServerPixel pixel = new ServerPixel(pixels.x, pixels.y,new ServerColor(Convert.ToByte(col.r * 255), Convert.ToByte(col.g*255), Convert.ToByte(col.b*255), Convert.ToByte(col.a*255)) );
         ServerServiceHelper.SendPixelUpdate(pixel);
 
-    }
-
-    public void OnPointerDown(PointerEventData eventData)
-    {
-      
-    }
-
-    public void OnPointerEnter(PointerEventData eventData)
-    {
-        var pixels = PointerDataToPixelPos(eventData);
-    }
-
-    public void OnPointerExit(PointerEventData eventData)
-    {
-    }
-
-    public void OnPointerUp(PointerEventData eventData)
-    {
     }
 
     private Vector2Int PointerDataToPixelPos(PointerEventData eventData)
@@ -108,7 +103,7 @@ public class PaintCanvas : MonoBehaviour, IPointerEnterHandler, IPointerExitHand
         Vector2 clickPosition = eventData.position;
 
         RectTransformUtility.ScreenPointToLocalPointInRectangle(rectT, clickPosition, null, out result);
-        result += rectT.rect.size; // todo :: divide with anchor/pivot for correct size if they are changed.
+        result += rectT.rect.size - rectT.rect.position;
 
         return result;
     }
